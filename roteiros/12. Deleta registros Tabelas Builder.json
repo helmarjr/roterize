@@ -1,0 +1,57 @@
+[
+  {
+    "info": "acessa tabela",
+    "mouse": {"x": 2440, "y": 570, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 5}
+  },
+  {
+    "info": "data builder",
+    "mouse": {"x": 2325, "y": 290, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 10}
+  },
+{
+    "info": "posiciona",
+    "mouse": {"x": 1500, "y": 300, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 0.5}
+  },
+
+{
+    "info": "Posiciona no Deletar",
+    "teclado": {"pressionar": "tab"},
+    "esperar": {"depois": 0},
+    "repetir": 8
+  },
+  {
+    "info": "Seleciona",
+    "teclado": {"pressionar": "enter"},
+    "esperar": {"depois": 1	}
+  },
+  {
+    "info": "Seleciona",
+    "teclado": {"pressionar": "enter"},
+    "esperar": {"depois": 0.5}
+  },
+{
+    "info": "Posiciona no Deletar",
+    "teclado": {"pressionar": "tab"},
+    "esperar": {"depois": 0},
+    "repetir": 3
+  },
+
+  {
+    "info": "Seleciona",
+    "teclado": {"pressionar": "enter"},
+    "esperar": {"depois": 1}
+  },
+ {
+    "info": "voltar",
+    "mouse": {"x": 120, "y": 200, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 2}
+  },
+ {
+    "info": "voltar",
+    "mouse": {"x": 122, "y": 202, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 4}
+  }
+
+]

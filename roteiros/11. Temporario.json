@@ -1,0 +1,20 @@
+[
+   {
+    "info": "acessa tabela",
+    "mouse": {"x": 1620, "y": 930, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 0}
+  },
+ {
+    "info": "Seleciona",
+    "teclado": {"pressionar": "down"},
+    "esperar": {"depois": 0},
+    "repetir": 5
+  },
+
+  {
+    "info": "Seleciona",
+    "teclado": {"pressionar": "enter"},
+    "esperar": {"depois": 1}
+  }
+
+]

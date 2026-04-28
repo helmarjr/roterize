@@ -1,0 +1,49 @@
+[
+  
+  {
+    "info": "ultimo registro",
+    "mouse": {"x": 1500, "y": 2000, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 0}
+  },
+
+ {
+    "info": "proximo",
+    "teclado": {"pressionar": "down"},
+    "esperar": {"depois": 0}
+  },
+
+  {
+    "info": "Entra na tabela",
+    "mouse": {"x": 1812, "y": 511, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 10}
+  },
+  {
+    "info": "Seleciona",
+    "mouse": {"x": 1450, "y": 290, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 0.5}
+  },
+ {
+    "info": "search",
+    "teclado": {"pressionar": "tab"},
+    "esperar": {"depois": 0},
+    "repetir": 6
+  },
+
+ {
+    "info": " enter",
+    "teclado": {"pressionar": "enter"},
+    "esperar": {"depois": 1}
+  },
+ {
+    "info": "enter",
+    "teclado": {"pressionar": "enter"},
+    "esperar": {"depois": 1}
+  },
+  {
+    "info": "Volta na lista",
+    "mouse": {"x": 800, "y": 200, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 5}
+  }
+
+
+]

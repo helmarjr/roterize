@@ -1,0 +1,24 @@
+[
+ {
+    "info": "Foco",
+    "mouse": {"x": 1100, "y": 1000, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 0}
+  },
+ {
+    "info": "seleciona tudo",
+    "teclado": {"atalho": "ctrl+a"},
+    "esperar": {"depois": 0.5}
+  },
+
+ {
+    "info": "Copia",
+    "teclado": {"atalho": "ctrl+c"},  
+    "esperar": {"depois": 0.5}
+  },
+
+  {
+    "info": "Ajusta texto",
+    "teclado": {"funcao_py": "alias_uppercase", "colar": true},
+    "esperar": {"depois": 0}
+  }  
+]

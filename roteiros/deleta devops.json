@@ -1,0 +1,17 @@
+[
+  {
+    "info": "Exemplo mouse",
+    "mouse": {"x": 1530, "y": 930, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 0.3}
+  },
+{
+    "info": "Exemplo mouse",
+    "mouse": {"x": 1300, "y": 1180, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 0.3}
+  },
+  {
+    "info": "Exemplo pressionar ENTER",
+    "teclado": {"pressionar": "enter"},
+    "esperar": {"depois": 1}
+  }
+]

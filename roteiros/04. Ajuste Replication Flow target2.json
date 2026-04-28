@@ -1,22 +1,22 @@
 [
   {
     "info": "Foco",
-    "mouse": {"x": 1800, "y": "544 + (i * 54)", "acao": "clicar_segurar"},
+    "mouse": {"x": 1800, "y": "544 + (i * 55)", "acao": "clicar_segurar"},
     "esperar": {"depois": 0.6}
   },
   {
     "info": "pega nome atual 1/3",
-    "mouse": {"x": 1800, "y": "544 + (i * 54)", "acao": "clicar_segurar"},
+    "mouse": {"x": 1800, "y": "544 + (i * 55)", "acao": "clicar_segurar"},
     "esperar": {"depois": 0}
   },
   {
     "info": "pega nome atual 1/3",
-    "mouse": {"x": 1380, "y": "544 + (i * 54)", "acao": "mover"},
+    "mouse": {"x": 1380, "y": "544 + (i * 55)", "acao": "mover"},
     "esperar": {"depois": 0}
   },
   {
     "info": "pega nome atual 1/3",
-    "mouse": {"x": 1380, "y": "544 + (i * 54)", "acao": "clicar_soltar"},
+    "mouse": {"x": 1380, "y": "544 + (i * 55)", "acao": "clicar_soltar"},
     "esperar": {"depois": 0}
   },
   {
@@ -30,7 +30,7 @@
   },
   {
     "info": "menu item",
-    "mouse": {"x": 1860, "y": "544 + (i * 54)", "acao": "clicar_esquerdo"},
+    "mouse": {"x": 1860, "y": "544 + (i * 55)", "acao": "clicar_esquerdo"},
     "esperar": {"depois": 0}
   },
  {

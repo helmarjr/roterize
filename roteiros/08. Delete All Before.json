@@ -1,0 +1,10 @@
+[
+ {
+    "teclado": {"pressionar": "down"},
+    "esperar": {"depois": 0}
+  },
+ {
+    "teclado": {"pressionar": "space"},
+    "esperar": {"depois": 0}
+  }
+]

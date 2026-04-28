@@ -28,11 +28,13 @@ from transformacoes import TRANSFORMACOES
 
 
 class Paths:
-    BASE_DIR = Path(__file__).resolve().parent.parent
-    APP_DIR = BASE_DIR / "app"
-    ROTEIROS_DIR = BASE_DIR / "pyBossAll" / "roteiros"
-    TABELAS_DIR = BASE_DIR / "pyBossAll" / "tabelas"
-    HELP_FILE = Path(__file__).resolve().with_name("help_roteiro.txt")
+    """Application path constants and directory management."""
+
+    APP_DIR = Path(__file__).resolve().parent
+    BASE_DIR = APP_DIR.parent
+    ROTEIROS_DIR = APP_DIR / "roteiros"
+    TABELAS_DIR = APP_DIR / "tabelas"
+    HELP_FILE = APP_DIR / "help_roteiro.txt"
 
     @classmethod
     def ensure_dirs(cls) -> None:
@@ -42,6 +44,22 @@ class Paths:
 
 Paths.ensure_dirs()
 pyautogui.FAILSAFE = True
+
+
+class Constants:
+    """Centralised magic numbers and configuration values."""
+
+    CSV_BUFFER_SIZE: int = 2048
+    CLIPBOARD_RETRIES: int = 15
+    CLIPBOARD_BASE_DELAY: float = 0.20
+    HIGHLIGHT_DEBOUNCE_MS: int = 120
+    LOG_POLL_INTERVAL_MS: int = 150
+    MOUSE_POLL_INTERVAL_MS: int = 100
+    FAILSAFE_CORNER_THRESHOLD: int = 10
+    APP_WINDOW_GEOMETRY: str = "1240x800"
+    TABLE_EDITOR_GEOMETRY: str = "900x560"
+    SCRIPT_EDITOR_GEOMETRY: str = "980x620"
+    HELP_WINDOW_GEOMETRY: str = "980x760"
 
 
 def _parse_script_json(content: str) -> list:
@@ -68,6 +86,8 @@ DEFAULT_SCRIPT = """[
 
 
 class ConsoleTag(str, Enum):
+    """Tags for categorising console log messages by severity and type."""
+
     DEFAULT = "default"
     INFO = "info"
     SUCCESS = "success"
@@ -81,6 +101,8 @@ class ConsoleTag(str, Enum):
 
 @dataclass
 class StepContext:
+    """Runtime state carried through a single iteration of script execution."""
+
     iteration_index: int
     table_contexts: dict[str, "TableCursor"]
     default_table: "TableCursor | None"
@@ -91,6 +113,8 @@ class StepContext:
 
 @dataclass
 class TableCursor:
+    """Manages reading from and writing to a CSV table file, tracking row status."""
+
     name: str
     path: Path
     rows: list[dict[str, str]]
@@ -105,7 +129,7 @@ class TableCursor:
             raise FileNotFoundError(f"Tabela não encontrada: {path.name}")
 
         with path.open("r", encoding="utf-8-sig", newline="") as file:
-            sample = file.read(2048)
+            sample = file.read(Constants.CSV_BUFFER_SIZE)
             file.seek(0)
             delimiter = ";" if sample.count(";") >= sample.count(",") else ","
             reader = csv.DictReader(file, delimiter=delimiter)
@@ -163,6 +187,8 @@ class TableCursor:
 
 
 class ScriptRunner:
+    """Executes automation scripts step by step, managing table cursors and retries."""
+
     def __init__(
         self,
         log_callback: Callable[[str, str], None],
@@ -565,7 +591,7 @@ class ScriptRunner:
                 return True
         return False
 
-    def _clipboard_op_with_retry(self, op: Callable[[], Any], busy_msg: str, retries: int = 15, base_delay: float = 0.20) -> Any:
+    def _clipboard_op_with_retry(self, op: Callable[[], Any], busy_msg: str, retries: int = Constants.CLIPBOARD_RETRIES, base_delay: float = Constants.CLIPBOARD_BASE_DELAY) -> Any:
         if pyperclip is None:
             raise RuntimeError("pyperclip não está instalado.")
         last_error: Exception | None = None
@@ -583,10 +609,10 @@ class ScriptRunner:
                     time.sleep(wait_time)
         raise RuntimeError(f"Falha após {retries} tentativas: {last_error}") from last_error
 
-    def _clipboard_copy_with_retry(self, text: str, retries: int = 15, base_delay: float = 0.20) -> None:
+    def _clipboard_copy_with_retry(self, text: str, retries: int = Constants.CLIPBOARD_RETRIES, base_delay: float = Constants.CLIPBOARD_BASE_DELAY) -> None:
         self._clipboard_op_with_retry(lambda: pyperclip.copy(text), "Clipboard ocupado ao copiar.", retries, base_delay)
 
-    def _clipboard_paste_with_retry(self, retries: int = 15, base_delay: float = 0.20) -> str:
+    def _clipboard_paste_with_retry(self, retries: int = Constants.CLIPBOARD_RETRIES, base_delay: float = Constants.CLIPBOARD_BASE_DELAY) -> str:
         return self._clipboard_op_with_retry(pyperclip.paste, "Clipboard ocupado ao ler.", retries, base_delay)
 
     def _paste_via_clipboard(self, text: str) -> None:
@@ -715,6 +741,8 @@ class ScriptRunner:
 
 
 class BaseEditorWindow(tk.Toplevel):
+    """Base class for CRUD editor windows: left file list, right text editor."""
+
     def __init__(self, master: "AutomationApp", title: str, geometry: str) -> None:
         super().__init__(master)
         self.app = master
@@ -785,7 +813,7 @@ class BaseEditorWindow(tk.Toplevel):
 
 class TableEditorWindow(BaseEditorWindow):
     def __init__(self, master: "AutomationApp") -> None:
-        super().__init__(master, title="CRUD de Tabelas (CSV)", geometry="900x560")
+        super().__init__(master, title="CRUD de Tabelas (CSV)", geometry=Constants.TABLE_EDITOR_GEOMETRY)
         self._build_layout("Nome do arquivo (sem .csv):")
         self.editor.insert("1.0", "ID;NOME;STATUS\n1;Exemplo;\n")
         self.refresh_list()
@@ -847,7 +875,7 @@ class TableEditorWindow(BaseEditorWindow):
 
 class ScriptEditorWindow(BaseEditorWindow):
     def __init__(self, master: "AutomationApp") -> None:
-        super().__init__(master, title="CRUD de Roteiros (JSON)", geometry="980x620")
+        super().__init__(master, title="CRUD de Roteiros (JSON)", geometry=Constants.SCRIPT_EDITOR_GEOMETRY)
         self._build_layout("Nome do arquivo (sem .json):")
         self.new_file()
         self.refresh_list()
@@ -884,7 +912,7 @@ class ScriptEditorWindow(BaseEditorWindow):
         content = self.editor.get("1.0", tk.END).strip()
         try:
             _parse_script_json(content)
-        except Exception as exc:
+        except (json.JSONDecodeError, ValueError) as exc:
             messagebox.showerror("Erro de JSON", str(exc))
             return
 
@@ -929,7 +957,7 @@ class HelpWindow(tk.Toplevel):
     def __init__(self, master: tk.Tk) -> None:
         super().__init__(master)
         self.title("Roterize — Guia de Comandos")
-        self.geometry("980x760")
+        self.geometry(Constants.HELP_WINDOW_GEOMETRY)
         self.configure(bg=self._BG)
         self.resizable(True, True)
         self._build()
@@ -1403,10 +1431,12 @@ ID;NOME;EMAIL;STATUS
 
 
 class AutomationApp(tk.Tk):
+    """Main application window for the Roterize automation tool."""
+
     def __init__(self) -> None:
         super().__init__()
         self.title("Roterize")
-        self.geometry("1240x800")
+        self.geometry(Constants.APP_WINDOW_GEOMETRY)
 
         self.script_name_var = tk.StringVar()
         self.selected_table_var = tk.StringVar()
@@ -1434,8 +1464,8 @@ class AutomationApp(tk.Tk):
         self.refresh_script_dropdown()
         self.refresh_table_dropdown()
         self.set_script_text(DEFAULT_SCRIPT)
-        self.after(150, self.process_log_queue)
-        self.after(100, self.update_mouse_position)
+        self.after(Constants.LOG_POLL_INTERVAL_MS, self.process_log_queue)
+        self.after(Constants.MOUSE_POLL_INTERVAL_MS, self.update_mouse_position)
 
     def _build_ui(self) -> None:
         # ── Menu bar ──────────────────────────────────────────────────────────
@@ -1602,7 +1632,7 @@ class AutomationApp(tk.Tk):
     def _handle_script_change(self, _event: tk.Event) -> None:
         if self._highlight_after_id:
             self.after_cancel(self._highlight_after_id)
-        self._highlight_after_id = self.after(120, self._refresh_script_view)
+        self._highlight_after_id = self.after(Constants.HIGHLIGHT_DEBOUNCE_MS, self._refresh_script_view)
 
     def _refresh_script_view(self) -> None:
         self.apply_json_highlight()
@@ -1696,7 +1726,7 @@ class AutomationApp(tk.Tk):
         content = self.script_text.get("1.0", tk.END).strip()
         try:
             _parse_script_json(content)
-        except Exception as exc:
+        except (json.JSONDecodeError, ValueError) as exc:
             messagebox.showerror("Erro de JSON", str(exc))
             return
 
@@ -1717,7 +1747,7 @@ class AutomationApp(tk.Tk):
             repetitions = int(self.repetitions_var.get())
             float(self.start_delay_var.get())
             float(self.delay_var.get())
-        except Exception as exc:
+        except (json.JSONDecodeError, ValueError, TypeError) as exc:
             messagebox.showerror("Erro", str(exc))
             return
 
@@ -1758,7 +1788,7 @@ class AutomationApp(tk.Tk):
         self.console_text.delete("1.0", tk.END)
         self.console_text.config(state="disabled")
 
-    def log(self, message: str, tag: str = ConsoleTag.DEFAULT.value) -> None:
+    def log(self, message: str, tag: ConsoleTag | str = ConsoleTag.DEFAULT.value) -> None:
         timestamp = time.strftime("%H:%M:%S")
         self.log_queue.put((f"[{timestamp}] {message}", tag))
 
@@ -1769,17 +1799,17 @@ class AutomationApp(tk.Tk):
             self.console_text.insert(tk.END, message + "\n", tag)
             self.console_text.see(tk.END)
             self.console_text.config(state="disabled")
-        self.after(150, self.process_log_queue)
+        self.after(Constants.LOG_POLL_INTERVAL_MS, self.process_log_queue)
 
     def update_mouse_position(self) -> None:
         try:
             x, y = pyautogui.position()
             self.mouse_position_var.set(f"Mouse: X={x} Y={y}")
-            if x <= 10 and y <= 10 and self.worker_thread and self.worker_thread.is_alive():
+            if x <= Constants.FAILSAFE_CORNER_THRESHOLD and y <= Constants.FAILSAFE_CORNER_THRESHOLD and self.worker_thread and self.worker_thread.is_alive():
                 self.stop_execution()
         except Exception:
             self.mouse_position_var.set("Mouse: X=? Y=?")
-        self.after(100, self.update_mouse_position)
+        self.after(Constants.MOUSE_POLL_INTERVAL_MS, self.update_mouse_position)
 
 
 if __name__ == "__main__":

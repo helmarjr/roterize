@@ -1,0 +1,43 @@
+[
+  {
+    "info": "acessa tabela",
+    "mouse": {"x": 2440, "y": 570, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 8}
+  },
+  {
+    "info": "Posiciona no Deletar",
+    "teclado": {"pressionar": "tab"},
+    "esperar": {"depois": 0}
+  },
+  {
+    "info": "Seleciona",
+    "teclado": {"pressionar": "enter"},
+    "esperar": {"depois": 0.5}
+  },
+			  {
+    "info": "Posiciona no Deletar",
+    "teclado": {"pressionar": "tab"},
+    "esperar": {"depois": 0},
+    "repetir": 6
+  },
+  {
+    "info": "Seleciona",
+    "teclado": {"pressionar": "enter"},
+    "esperar": {"depois": 0.5}
+  },
+  {
+    "info": "Confirma",
+    "teclado": {"pressionar": "enter"},
+    "esperar": {"depois": 0.5}
+  },
+  {
+    "info": "Volta na Lista de tabelas",
+    "mouse": {"x": 700, "y": 210, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 10}
+  },
+ {
+    "info": "Volta na Lista de tabelas",
+    "mouse": {"x": 2480, "y": 2011, "acao": "clicar_esquerdo"},
+    "esperar": {"depois": 0}
+  }
+]
