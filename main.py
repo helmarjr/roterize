@@ -25,6 +25,14 @@ except ImportError:
     pyperclip = None
 
 from transformacoes import TRANSFORMACOES
+from dsl_parser import (
+    DSL_DEFAULT_SCRIPT,
+    FUNC_NAMES as DSL_FUNC_NAMES,
+    find_comment_pos,
+    is_dsl_content,
+    json_to_dsl,
+    parse_dsl,
+)
 
 
 class Paths:
@@ -62,27 +70,17 @@ class Constants:
     HELP_WINDOW_GEOMETRY: str = "980x760"
 
 
-def _parse_script_json(content: str) -> list:
+def _parse_script_content(content: str) -> list:
+    """Parse roteiro content: DSL or legacy JSON, returning a list of steps."""
+    if is_dsl_content(content):
+        return parse_dsl(content)
     parsed = json.loads(content)
     if not isinstance(parsed, list):
         raise ValueError("O roteiro deve ser uma lista JSON.")
     return parsed
 
 
-DEFAULT_SCRIPT = """[
-  {
-    \"info\": \"Exemplo mouse\",
-    \"mouse\": {\"x\": 250, \"y\": 620, \"acao\": \"clicar_esquerdo\"}
-  },
-  {
-    \"info\": \"Exemplo com tabela selecionada\",
-    \"teclado\": {\"campo_tabela\": \"NOME\"}
-  },
-  {
-    \"info\": \"Exemplo pressionar ENTER\",
-    \"teclado\": {\"pressionar\": \"enter\"}
-  }
-]"""
+DEFAULT_SCRIPT = DSL_DEFAULT_SCRIPT
 
 
 class ConsoleTag(str, Enum):
@@ -492,9 +490,17 @@ class ScriptRunner:
         elif action == "funcao_py":
             colar = bool(payload.get("colar", True))
             self._execute_transform_function(str(value).strip(), context, colar)
+        elif action == "guardar_py":
+            raw = str(value).strip()
+            if raw.startswith("[") and raw.endswith("]"):
+                raw = raw[1:-1]
+            text = self._resolve_field_reference(raw, context)
+            context.py_result = text
+            self.log(f"guardar_py: {value!r} → {text!r}", ConsoleTag.INFO.value)
         else:
             raise ValueError(
-                f"Subitem de teclado inválido: {action}. Use digitar, atalho, pressionar, campo_tabela ou funcao_py."
+                f"Subitem de teclado inválido: {action}. "
+                "Use digitar, atalho, pressionar, campo_tabela, funcao_py ou guardar_py."
             )
 
     def _execute_printscreen(self, payload: dict[str, Any], context: StepContext) -> None:
@@ -740,6 +746,243 @@ class ScriptRunner:
             raise ValueError(f'Ação "{action}" exige x e y no passo do roteiro.')
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+#  DSL Autocomplete
+# ─────────────────────────────────────────────────────────────────────────────
+
+class DslAutocomplete:
+    """Keyword-aware popup autocomplete for the DSL script editor."""
+
+    _FUNCTIONS = sorted(DSL_FUNC_NAMES)
+    _SNIPPETS: dict[str, str] = {
+        "esperar":            'esperar(0.5)',
+        "mouse":              'mouse(x=, y=, acao="clicar_esquerdo")',
+        "printscreen":        ('printscreen(pasta="", nome_arquivo="", formato="png",'
+                               ' sobrescrever=false, x=0, y=0, largura=1920, altura=1080)'),
+        "secao":              'secao("")',
+        "teclado_atalho":     'teclado_atalho("")',
+        "teclado_digitar":    'teclado_digitar("")',
+        "teclado_funcao_py":  'teclado_funcao_py("", colar=true)',
+        "teclado_pressionar": 'teclado_pressionar("")',
+    }
+    _MOUSE_ACOES  = sorted(["clicar_duplo", "clicar_direito", "clicar_esquerdo",
+                             "clicar_segurar", "clicar_soltar", "mover"])
+    _FORMATOS     = ["bmp", "jpeg", "jpg", "png"]
+    _TECLAS       = sorted(["backspace", "delete", "down", "end", "enter", "esc",
+                            "home", "left", "pagedown", "pageup", "right", "space",
+                            "tab", "up"] + [f"F{n}" for n in range(1, 13)])
+    _TRANSFORM    = sorted(TRANSFORMACOES.keys())
+
+    def __init__(self, editor: tk.Text, get_columns: Callable[[], list[str]]) -> None:
+        self._ed = editor
+        self._get_cols = get_columns
+        self._popup: tk.Toplevel | None = None
+        self._lb: tk.Listbox | None = None
+        self._items: list[str] = []
+        self._ctx: str = "none"
+        editor.bind("<KeyRelease>", self._on_key_release, add=True)
+        editor.bind("<FocusOut>",   lambda _e: self._hide(), add=True)
+
+    # ── Public ────────────────────────────────────────────────────────────────
+
+    def hide(self) -> None:
+        self._hide()
+
+    # ── Context detection ─────────────────────────────────────────────────────
+
+    def _line_to_cursor(self) -> str:
+        cursor = self._ed.index("insert")
+        row = cursor.split(".")[0]
+        return self._ed.get(f"{row}.0", cursor)
+
+    def _get_context(self) -> tuple[str, str]:
+        """Return (prefix, context_type)."""
+        s = self._line_to_cursor()
+
+        # Inside [CAMPO...]
+        m = re.search(r"\[([^\]]*)$", s)
+        if m:
+            return m.group(1), "bracket"
+
+        # acao="..."
+        m = re.search(r'\bacao\s*=\s*"([^"]*)$', s)
+        if m:
+            return m.group(1), "acao"
+
+        # teclado_funcao_py first quoted arg
+        m = re.search(r'\bteclado_funcao_py\s*\(\s*"([^"]*)$', s)
+        if m:
+            return m.group(1), "funcao_py"
+
+        # teclado_pressionar first quoted arg
+        m = re.search(r'\bteclado_pressionar\s*\(\s*"([^"]*)$', s)
+        if m:
+            return m.group(1), "tecla"
+
+        # formato="..."
+        m = re.search(r'\bformato\s*=\s*"([^"]*)$', s)
+        if m:
+            return m.group(1), "formato"
+
+        # Function name at start of line (no open paren yet)
+        if "(" not in s:
+            stripped = s.lstrip()
+            if re.match(r"^[a-zA-Z_]\w*$", stripped) or stripped == "":
+                return stripped, "func"
+
+        return "", "none"
+
+    # ── Update cycle ──────────────────────────────────────────────────────────
+
+    def _on_key_release(self, event: tk.Event) -> None:
+        if event.keysym in ("Escape", "Return", "Tab", "Up", "Down", "Left", "Right"):
+            return
+        prefix, ctx = self._get_context()
+        if ctx == "none":
+            self._hide()
+            return
+
+        if ctx == "func":
+            items = [f for f in self._FUNCTIONS if f.startswith(prefix)]
+        elif ctx == "acao":
+            items = [a for a in self._MOUSE_ACOES if a.startswith(prefix)]
+        elif ctx == "funcao_py":
+            items = [f for f in self._TRANSFORM if f.startswith(prefix)]
+        elif ctx == "tecla":
+            items = [t for t in self._TECLAS if t.lower().startswith(prefix.lower())]
+        elif ctx == "formato":
+            items = [f for f in self._FORMATOS if f.startswith(prefix)]
+        elif ctx == "bracket":
+            cols = self._get_cols()
+            items = [c for c in cols if c.upper().startswith(prefix.upper())]
+        else:
+            items = []
+
+        if not items:
+            self._hide()
+            return
+
+        self._ctx = ctx
+        self._items = items
+        self._show_popup(items)
+
+    # ── Popup ─────────────────────────────────────────────────────────────────
+
+    def _show_popup(self, items: list[str]) -> None:
+        if self._popup is None or not self._popup.winfo_exists():
+            self._popup = tk.Toplevel(self._ed)
+            self._popup.wm_overrideredirect(True)
+            self._popup.configure(bg="#1e293b")
+            self._lb = tk.Listbox(
+                self._popup,
+                bg="#1e293b", fg="#e2e8f0",
+                selectbackground="#3b82f6", selectforeground="#ffffff",
+                font=("Consolas", 10), relief="flat", bd=1,
+                activestyle="none", exportselection=False,
+            )
+            self._lb.pack(fill="both", expand=True)
+            self._lb.bind("<ButtonRelease-1>", lambda _e: self._select())
+            self._ed.bind("<Down>",   self._on_down)
+            self._ed.bind("<Up>",     self._on_up)
+            self._ed.bind("<Tab>",    self._on_tab)
+            self._ed.bind("<Return>", self._on_return)
+            self._ed.bind("<Escape>", lambda _e: self._hide())
+
+        assert self._lb is not None
+        self._lb.delete(0, tk.END)
+        for item in items:
+            self._lb.insert(tk.END, item)
+        self._lb.selection_set(0)
+
+        bbox = self._ed.bbox("insert")
+        if bbox:
+            x = self._ed.winfo_rootx() + bbox[0]
+            y = self._ed.winfo_rooty() + bbox[1] + bbox[3]
+            w = max(220, max(len(i) for i in items) * 9)
+            h = min(len(items), 8) * 19 + 4
+            self._popup.geometry(f"{w}x{h}+{x}+{y}")
+            self._popup.lift()
+
+    # ── Keyboard handlers (active only while popup is visible) ────────────────
+
+    def _on_down(self, _event: tk.Event) -> str:
+        if self._lb:
+            sel = self._lb.curselection()
+            idx = min((sel[0] if sel else 0) + 1, len(self._items) - 1)
+            self._lb.selection_clear(0, tk.END)
+            self._lb.selection_set(idx)
+            self._lb.see(idx)
+        return "break"
+
+    def _on_up(self, _event: tk.Event) -> str:
+        if self._lb:
+            sel = self._lb.curselection()
+            idx = max((sel[0] if sel else 0) - 1, 0)
+            self._lb.selection_clear(0, tk.END)
+            self._lb.selection_set(idx)
+            self._lb.see(idx)
+        return "break"
+
+    def _on_tab(self, _event: tk.Event) -> str:
+        self._select()
+        return "break"
+
+    def _on_return(self, _event: tk.Event) -> str | None:
+        if self._lb and self._lb.curselection():
+            self._select()
+            return "break"
+        return None
+
+    # ── Insertion ─────────────────────────────────────────────────────────────
+
+    def _select(self) -> None:
+        if self._lb is None:
+            return
+        sel = self._lb.curselection()
+        if not sel:
+            return
+        chosen = self._items[sel[0]]
+        self._do_insert(chosen, self._ctx)
+        self._hide()
+
+    def _do_insert(self, chosen: str, ctx: str) -> None:
+        cursor = self._ed.index("insert")
+        row = cursor.split(".")[0]
+        line_start = f"{row}.0"
+        line_to_cursor = self._ed.get(line_start, cursor)
+
+        if ctx == "func":
+            m = re.search(r"[a-zA-Z_]\w*$", line_to_cursor)
+            if m:
+                self._ed.delete(f"{row}.{m.start()}", cursor)
+            self._ed.insert("insert", self._SNIPPETS.get(chosen, chosen))
+
+        elif ctx in ("acao", "funcao_py", "formato", "tecla"):
+            q = line_to_cursor.rfind('"')
+            if q >= 0:
+                self._ed.delete(f"{row}.{q + 1}", cursor)
+            self._ed.insert("insert", chosen)
+
+        elif ctx == "bracket":
+            b = line_to_cursor.rfind("[")
+            if b >= 0:
+                self._ed.delete(f"{row}.{b + 1}", cursor)
+            self._ed.insert("insert", chosen + "]")
+
+    # ── Hide ──────────────────────────────────────────────────────────────────
+
+    def _hide(self) -> None:
+        if self._popup and self._popup.winfo_exists():
+            self._popup.destroy()
+        self._popup = None
+        self._lb = None
+        self._ed.unbind("<Down>")
+        self._ed.unbind("<Up>")
+        self._ed.unbind("<Tab>")
+        self._ed.unbind("<Return>")
+        self._ed.unbind("<Escape>")
+
+
 class BaseEditorWindow(tk.Toplevel):
     """Base class for CRUD editor windows: left file list, right text editor."""
 
@@ -875,7 +1118,7 @@ class TableEditorWindow(BaseEditorWindow):
 
 class ScriptEditorWindow(BaseEditorWindow):
     def __init__(self, master: "AutomationApp") -> None:
-        super().__init__(master, title="CRUD de Roteiros (JSON)", geometry=Constants.SCRIPT_EDITOR_GEOMETRY)
+        super().__init__(master, title="CRUD de Roteiros", geometry=Constants.SCRIPT_EDITOR_GEOMETRY)
         self._build_layout("Nome do arquivo (sem .json):")
         self.new_file()
         self.refresh_list()
@@ -886,6 +1129,7 @@ class ScriptEditorWindow(BaseEditorWindow):
             ("Salvar", self.save_file),
             ("Excluir", self.delete_file),
             ("Carregar na tela principal", self.load_into_main),
+            ("Converter JSON → DSL", self.convert_to_dsl),
             ("Atualizar lista", self.refresh_list),
         ]
 
@@ -911,9 +1155,9 @@ class ScriptEditorWindow(BaseEditorWindow):
 
         content = self.editor.get("1.0", tk.END).strip()
         try:
-            _parse_script_json(content)
+            _parse_script_content(content)
         except (json.JSONDecodeError, ValueError) as exc:
-            messagebox.showerror("Erro de JSON", str(exc))
+            messagebox.showerror("Erro no roteiro", str(exc))
             return
 
         path = Paths.ROTEIROS_DIR / f"{name}.json"
@@ -932,6 +1176,22 @@ class ScriptEditorWindow(BaseEditorWindow):
             self.app.refresh_script_dropdown()
             self.refresh_list()
             self.new_file()
+
+    def convert_to_dsl(self) -> None:
+        content = self.editor.get("1.0", tk.END).strip()
+        if not content:
+            messagebox.showwarning("Aviso", "Editor vazio.")
+            return
+        if is_dsl_content(content):
+            messagebox.showinfo("Info", "O roteiro já está em formato DSL.")
+            return
+        try:
+            steps = _parse_script_content(content)
+            dsl = json_to_dsl(steps)
+            self.editor.delete("1.0", tk.END)
+            self.editor.insert("1.0", dsl)
+        except Exception as exc:
+            messagebox.showerror("Erro na conversão", str(exc))
 
     def load_into_main(self) -> None:
         self.app.script_name_var.set(self.name_var.get().strip())
@@ -1094,7 +1354,7 @@ class HelpWindow(tk.Toplevel):
         self._sec_mouse()
         self._sec_teclado()
         self._sec_printscreen()
-        self._sec_placeholders()
+        self._sec_variaveis()
         self._sec_tabelas()
         self._sec_exemplos()
 
@@ -1103,234 +1363,236 @@ class HelpWindow(tk.Toplevel):
     def _sec_estrutura(self) -> None:
         self._section("1.  ESTRUTURA GERAL", "sec_estrutura")
         self._nl()
-        self._ins("  O roteiro é uma ", "body")
-        self._ins("lista JSON", "field")
-        self._ins(" onde cada elemento representa um passo da automação.\n", "body")
-        self._ins("  Cada passo pode conter ", "body")
-        self._ins("uma ação principal", "tip")
-        self._ins(" (mouse, teclado ou printscreen) e campos auxiliares.\n", "body")
+        self._ins("  Um comando por linha. Comentários com ", "body")
+        self._ins("--", "field")
+        self._ins(". Parâmetros opcionais marcados com ", "body")
+        self._ins("?", "tip")
+        self._ins(" na documentação — basta omiti-los.\n", "body")
         self._code("""\
-[
-  { "secao": "Bloco 1 — Abrir janela" },
+-- Variáveis: i (iteração), count (execuções), py (resultado funcao_py)
+-- [CAMPO] ou [tabela.CAMPO] = coluna da tabela CSV
 
-  { "info": "Clicar no campo",
-    "mouse":   { "x": 400, "y": 300, "acao": "clicar_esquerdo" },
-    "esperar": { "depois": 0.3 } },
+secao("Bloco 1 — Abrir janela")
 
-  { "info": "Digitar valor da tabela",
-    "teclado": { "campo_tabela": "NOME" } },
+mouse(x=400, y=300, acao="clicar_esquerdo", info="Clicar no campo")
+esperar(0.3)
 
-  { "secao": "Bloco 2 — Salvar" },
+teclado_digitar([NOME], info="Digitar da tabela")
 
-  { "info": "Salvar com atalho",
-    "teclado": { "atalho": "ctrl+s" } }
-]""")
-        self._note("Somente 1 ação principal por passo. Nunca combine mouse + teclado no mesmo item.")
+secao("Bloco 2 — Salvar")
+
+teclado_atalho("ctrl+s", info="Salvar")""")
+        self._note("Somente um comando por linha. Chamadas longas podem continuar na linha seguinte.")
 
     # ── 2. Auxiliares ─────────────────────────────────────────────────────────
 
     def _sec_auxiliares(self) -> None:
-        self._section("2.  CAMPOS AUXILIARES", "sec_aux")
+        self._section("2.  AUXILIARES", "sec_aux")
 
-        self._sub2("info")
-        self._ins("  Descrição exibida no console durante a execução. Não afeta o comportamento.\n", "body")
-        self._code('{ "info": "Abrindo janela de busca", "teclado": { "pressionar": "enter" } }')
-
-        self._sub2("secao")
-        self._ins("  Marcador de bloco lógico. Aparece em ", "body")
+        self._sub2("secao(texto)")
+        self._ins("  Marcador de bloco. Aparece em ", "body")
         self._ins("amarelo bold", "tip")
-        self._ins(" no console. Não executa nenhuma ação.\n", "body")
-        self._code('{ "secao": "PARTE 1 — ABRIR OBJETO" }')
+        self._ins(" no console. Não executa ação.\n", "body")
+        self._code('secao("PARTE 1 — ABRIR VIEW")')
 
-        self._sub2("esperar")
-        self._ins("  Pausa em segundos antes e/ou depois da ação.\n", "body")
-        self._code("""\
-{ "info": "...",
-  "teclado": { "pressionar": "enter" },
-  "esperar": { "antes": 0.5, "depois": 1.0 } }""")
-        self._item("antes",  "pausa antes de executar")
-        self._item("depois", "pausa após executar")
+        self._sub2("esperar(segundos)")
+        self._ins("  Pausa em segundos.\n", "body")
+        self._code("esperar(0.5)   -- aguarda meio segundo\nesperar(1.0)")
 
-        self._sub2("repetir")
-        self._ins("  Repete o passo N vezes. Aceita número ou expressão com variáveis.\n", "body")
+        self._sub2("?repetir  e  ?info  em qualquer comando")
+        self._ins("  Todo comando de ação aceita ", "body")
+        self._ins("repetir", "field")
+        self._ins(" e ", "body")
+        self._ins("info", "field")
+        self._ins(" como parâmetros opcionais.\n", "body")
         self._code("""\
-{ "teclado": { "pressionar": "tab" }, "repetir": 3         }
-{ "teclado": { "pressionar": "tab" }, "repetir": "i + 1"   }
-{ "teclado": { "pressionar": "tab" }, "repetir": "count"   }
-{ "teclado": { "pressionar": "tab" }, "repetir": "count*2" }""")
+teclado_pressionar("tab", repetir=3, info="Avançar 3 campos")
+mouse(x=400, y=300, acao="clicar_esquerdo", repetir=i+1)
+teclado_pressionar("tab", repetir=count*2)""")
         self._item("i",     "índice da iteração atual (começa em 0)", "ph")
         self._item("count", "número de execuções acumuladas (começa em 1)", "ph")
-        self._note("Operadores disponíveis:  + − * / // % **")
+        self._note("Operadores disponíveis em repetir:  + − * / // % **")
 
     # ── 3. Mouse ──────────────────────────────────────────────────────────────
 
     def _sec_mouse(self) -> None:
-        self._section("3.  AÇÃO MOUSE", "sec_mouse")
+        self._section("3.  MOUSE", "sec_mouse")
         self._nl()
-        self._ins('  Formato:  ', "muted")
-        self._ins('"mouse": { "x": 800, "y": 500, "acao": "clicar_esquerdo" }', "inline")
+        self._ins("  Formato:  ", "muted")
+        self._ins("mouse(x=, y=, acao=\"\", ?repetir=1, ?info=\"\")", "inline")
         self._nl(2)
         self._ins("  Ações disponíveis:\n", "body")
-        acoes = [
+        for acao, desc in [
             ("clicar_esquerdo", "clique simples com botão esquerdo"),
             ("clicar_direito",  "clique simples com botão direito"),
             ("clicar_duplo",    "duplo clique com botão esquerdo"),
             ("mover",           "move o cursor sem clicar"),
             ("clicar_segurar",  "pressiona e segura o botão esquerdo"),
             ("clicar_soltar",   "solta o botão esquerdo"),
-        ]
-        for acao, desc in acoes:
+        ]:
             self._ins("    ")
             self._ins(f"{acao:<20}", "action")
             self._ins(f"→  {desc}\n", "muted")
         self._nl()
-        self._ins("  Posicionamento dinâmico:\n", "body")
-        self._ins("  Os campos ", "muted")
+        self._ins("  ", "body")
         self._ins("x", "field")
-        self._ins(" e ", "muted")
+        self._ins(" e ", "body")
         self._ins("y", "field")
-        self._ins(" aceitam expressões com ", "muted")
-        self._ins("{i}", "ph")
-        self._ins(" e ", "muted")
-        self._ins("{count}", "ph")
-        self._ins(":\n", "muted")
+        self._ins(" aceitam expressões aritméticas com ", "body")
+        self._ins("i", "ph")
+        self._ins(" e ", "body")
+        self._ins("count", "ph")
+        self._ins(":\n", "body")
         self._code("""\
-{ "mouse": { "x": 3333, "y": "42 + (i * 20)", "acao": "clicar_esquerdo" } }
-  ↑ i=0 → y=42  |  i=1 → y=62  |  i=2 → y=82""")
-        self._note("Operadores disponíveis:  + − * / // % **")
-        self._nl()
-        self._note("Drag & drop: use clicar_segurar → mover → clicar_soltar em passos consecutivos.")
+mouse(x=400, y=42 + i * 20, acao="clicar_esquerdo")
+-- i=0 → y=42  |  i=1 → y=62  |  i=2 → y=82""")
+        self._note("Drag & drop: encadeie clicar_segurar → mover → clicar_soltar.")
         self._code("""\
-{ "mouse": { "x": 200, "y": 300, "acao": "clicar_segurar" }, "esperar": { "depois": 0.3 } },
-{ "mouse": { "x": 600, "y": 300, "acao": "mover"          }, "esperar": { "depois": 0.1 } },
-{ "mouse": { "x": 600, "y": 300, "acao": "clicar_soltar"  }, "esperar": { "depois": 1.0 } }""")
+mouse(x=200, y=300, acao="clicar_segurar")
+esperar(0.3)
+mouse(x=600, y=300, acao="mover")
+esperar(0.1)
+mouse(x=600, y=300, acao="clicar_soltar")""")
 
     # ── 4. Teclado ────────────────────────────────────────────────────────────
 
     def _sec_teclado(self) -> None:
-        self._section("4.  AÇÃO TECLADO", "sec_teclado")
-        self._nl()
-        self._ins("  O objeto ", "body")
-        self._ins('"teclado"', "field")
-        self._ins(" deve conter exatamente ", "body")
-        self._ins("uma chave", "tip")
-        self._ins(" por passo.\n", "body")
+        self._section("4.  TECLADO", "sec_teclado")
 
-        self._sub2("digitar")
-        self._ins("  Cola um texto no campo com foco. Aceita placeholders.\n", "body")
+        self._sub2("teclado_digitar(valor, ?variavel_py=false, ?repetir, ?info)")
+        self._ins("  Cola texto no campo com foco. ", "body")
+        self._ins("valor", "field")
+        self._ins(" pode ser string, ", "body")
+        self._ins("[CAMPO]", "ph")
+        self._ins(" ou variável.\n", "body")
         self._code("""\
-{ "teclado": { "digitar": "texto fixo"        } }
-{ "teclado": { "digitar": "Item_{i}"          } }
-{ "teclado": { "digitar": "Execucao_{count}"  } }""")
+teclado_digitar("texto fixo")
+teclado_digitar("Arquivo_{i}_exec{count}")  -- placeholders dentro de strings
+teclado_digitar([NOME])                     -- coluna da tabela selecionada
+teclado_digitar([clientes.EMAIL])           -- coluna de tabela específica
+teclado_digitar(py)                         -- último resultado de funcao_py""")
+        self._nl()
+        self._ins("  Com ", "body")
+        self._ins("variavel_py=true", "field")
+        self._ins(": lê o valor mas ", "body")
+        self._ins("não digita", "tip")
+        self._ins(", armazena em ", "body")
+        self._ins("py", "ph")
+        self._ins(":\n", "body")
+        self._code("""\
+teclado_digitar([NOME], variavel_py=true)   -- guarda em py sem digitar
+teclado_funcao_py("upper", colar=true)      -- aplica upper sobre py, digita""")
 
-        self._sub2("atalho")
+        self._sub2("teclado_atalho(teclas, ?repetir, ?info)")
         self._ins("  Executa uma combinação de teclas (hotkey).\n", "body")
         self._code("""\
-{ "teclado": { "atalho": "ctrl+s"       } }
-{ "teclado": { "atalho": "ctrl+shift+a" } }
-{ "teclado": { "atalho": "alt+f4"       } }""")
+teclado_atalho("ctrl+s")
+teclado_atalho("ctrl+shift+a")
+teclado_atalho("alt+f4")""")
 
-        self._sub2("pressionar")
+        self._sub2("teclado_pressionar(tecla, ?repetir, ?info)")
         self._ins("  Pressiona uma única tecla.\n", "body")
-        self._code('{ "teclado": { "pressionar": "enter" } }')
+        self._code('teclado_pressionar("enter")\nteclado_pressionar("tab", repetir=3)')
         self._nl()
         self._ins("  Teclas comuns: ", "muted")
-        teclas = "enter  tab  esc  space  backspace  delete  up  down  left  right  home  end  pageup  pagedown  F1…F12"
-        self._ins(teclas + "\n", "inline")
+        self._ins(
+            "enter  tab  esc  space  backspace  delete  up  down  left  right  home  end  pageup  pagedown  F1…F12\n",
+            "inline",
+        )
 
-        self._sub2("campo_tabela")
-        self._ins("  Lê o próximo registro pendente de uma tabela CSV e cola o valor no campo com foco.\n", "body")
-        self._code("""\
-{ "teclado": { "campo_tabela": "NOME"          } }  ← tabela do dropdown
-{ "teclado": { "campo_tabela": "clientes.EMAIL"} }  ← tabela específica""")
-        self._bullet("Ao concluir a iteração com sucesso  →  STATUS = OK na linha usada")
-        self._bullet("Se houver erro ou interrupção  →  rollback automático, linha volta para a fila")
-        self._bullet("É possível usar mais de uma tabela no mesmo roteiro")
-
-        self._sub2("funcao_py")
+        self._sub2("teclado_funcao_py(funcao, colar, ?repetir, ?info)")
         self._ins("  Aplica uma função de ", "body")
         self._ins("transformacoes.py", "field")
-        self._ins(" sobre o texto que está no clipboard.\n", "body")
-        self._code('{ "teclado": { "atalho": "ctrl+c" }, "esperar": { "depois": 0.5 } }\n{ "teclado": { "funcao_py": "NOME_DA_FUNCAO" } }')
-        self._note("Fluxo: Ctrl+C manual  →  lê clipboard  →  função(texto)  →  Ctrl+V com resultado.")
-        self._nl()
-        self._ins("  Use ", "body")
-        self._ins('"colar": false', "field")
-        self._ins(" para reter o resultado em ", "body")
-        self._ins("{py}", "ph")
-        self._ins(" sem colar automaticamente:\n", "body")
+        self._ins(" sobre o texto no clipboard. ", "body")
+        self._ins("colar=true", "field")
+        self._ins(" cola o resultado; ", "body")
+        self._ins("colar=false", "field")
+        self._ins(" armazena em ", "body")
+        self._ins("py", "ph")
+        self._ins(".\n", "body")
         self._code("""\
-{ "teclado": { "atalho": "ctrl+c" }, "esperar": { "depois": 0.5 } }
-{ "teclado": { "funcao_py": "extrair_tabela_do_from", "colar": false } }
-{ "printscreen": { "pasta": "C:/prints", "nome_arquivo": "PRINT_{py}", "formato": "png" } }
-{ "teclado": { "pressionar": "ctrl+v" } }  ← cole onde quiser depois""")
-        self._note("{py} fica disponível como placeholder até o fim da iteração.")
+teclado_atalho("ctrl+c")
+esperar(0.3)
+teclado_funcao_py("upper", colar=true)
+
+-- Encadeamento via py:
+teclado_funcao_py("extrair_tabela_do_from", colar=false)  -- clipboard → py
+teclado_funcao_py("trocar_prefixo_tabela_rf", colar=true) -- py → digita""")
+        self._nl()
+        self._ins("  Funções disponíveis em transformacoes.py:\n", "muted")
+        for fn in sorted(TRANSFORMACOES.keys()):
+            self._ins(f"    {fn}\n", "inline")
 
     # ── 5. Printscreen ────────────────────────────────────────────────────────
 
     def _sec_printscreen(self) -> None:
-        self._section("5.  AÇÃO PRINTSCREEN", "sec_print")
-        self._code("""\
-{ "info": "Capturar tela",
-  "printscreen": {
-    "pasta":        "C:/prints",
-    "nome_arquivo": "Print_[clientes.NOME]_{count}",
-    "formato":      "png",
-    "sobrescrever": true,
-    "regiao": { "x": 0, "y": 0, "largura": 1920, "altura": 1040 }
-  }
-}""")
-        campos = [
-            ("pasta",        "obrigatório",  "caminho da pasta de destino (criada automaticamente se não existir)"),
-            ("nome_arquivo", "obrigatório",  "nome do arquivo sem extensão — aceita [ ] e placeholders"),
-            ("formato",      "png*",         "png  |  jpg  |  jpeg  |  bmp"),
-            ("sobrescrever", "false*",       "true = substitui arquivo existente"),
-            ("regiao",       "opcional",     "captura apenas a área definida por x, y, largura, altura"),
-        ]
+        self._section("5.  PRINTSCREEN", "sec_print")
         self._nl()
-        for campo, default, desc in campos:
+        self._ins("  Todos os parâmetros são ", "body")
+        self._ins("obrigatórios", "tip")
+        self._ins(":\n", "body")
+        self._code("""\
+printscreen(pasta="C:/prints",
+            nome_arquivo="Print_{count}_{i}_[CAMPO]",
+            formato="png",
+            sobrescrever=false,
+            x=0, y=0, largura=1920, altura=1080)""")
+        self._nl()
+        for campo, desc in [
+            ("pasta",        "caminho da pasta de destino (criada automaticamente se não existir)"),
+            ("nome_arquivo", "nome do arquivo sem extensão — aceita [CAMPO] e {placeholders}"),
+            ("formato",      "png  |  jpg  |  jpeg  |  bmp"),
+            ("sobrescrever", "true = substitui arquivo existente, false = erro se já existir"),
+            ("x, y",         "coordenada superior esquerda da região capturada"),
+            ("largura, altura", "dimensões da região capturada em pixels"),
+        ]:
             self._ins("    ")
-            self._ins(f"{campo:<16}", "field")
-            self._ins(f"[{default}]  ", "value")
+            self._ins(f"{campo:<20}", "field")
             self._ins(f"{desc}\n", "muted")
-
-        self._sub2("Valores dinâmicos em nome_arquivo")
-        exemplos = [
-            ("[CAMPO]",         "coluna da tabela selecionada no dropdown"),
-            ("[tabela.CAMPO]",  "coluna de uma tabela específica"),
-            ("{count}",         "número de execuções acumuladas"),
-            ("{i}",             "índice da iteração atual"),
-        ]
-        for token, desc in exemplos:
+        self._nl()
+        self._ins("  Valores dinâmicos em ", "body")
+        self._ins("nome_arquivo", "field")
+        self._ins(":\n", "body")
+        for token, desc in [
+            ("[CAMPO]",        "coluna da tabela selecionada no dropdown"),
+            ("[tabela.CAMPO]", "coluna de tabela específica"),
+            ("{count}",        "número de execuções acumuladas"),
+            ("{i}",            "índice da iteração atual"),
+            ("{py}",           "último resultado de funcao_py"),
+        ]:
             self._ins("    ")
             self._ins(f"{token:<22}", "ph")
             self._ins(f"→  {desc}\n", "muted")
-        self._code('"nome_arquivo": "Rel_[clientes.NOME]_exec{count}_iter{i}"')
+        self._code('printscreen(pasta="C:/prints", nome_arquivo="Rel_[clientes.NOME]_exec{count}_iter{i}",\n'
+                   '            formato="png", sobrescrever=false, x=0, y=0, largura=1920, altura=1080)')
 
-    # ── 6. Placeholders ───────────────────────────────────────────────────────
+    # ── 6. Variáveis e placeholders ───────────────────────────────────────────
 
-    def _sec_placeholders(self) -> None:
-        self._section("6.  PLACEHOLDERS", "sec_ph")
+    def _sec_variaveis(self) -> None:
+        self._section("6.  VARIÁVEIS E PLACEHOLDERS", "sec_ph")
         self._nl()
-        self._ins("  Disponíveis em: ", "muted")
-        self._ins("digitar  campo_tabela  nome_arquivo  repetir\n", "inline")
+        self._ins("  Variáveis disponíveis como argumentos diretos ou ", "body")
+        self._ins("{placeholder}", "ph")
+        self._ins(" dentro de strings:\n", "body")
         self._nl()
-        rows = [
-            ("{i}",     "índice da iteração atual dentro da execução  (começa em 0, reseta a cada Executar)"),
-            ("{count}", "contador total de cliques em Executar na sessão  (começa em 1, acumula)"),
-            ("{py}",    "último resultado de funcao_py com colar:false  (reseta a cada iteração)"),
-        ]
-        for ph, desc in rows:
-            self._ins("    ")
-            self._ins(f"{ph:<12}", "ph")
+        for var, ph, desc in [
+            ("i",     "{i}",     "índice da iteração atual (começa em 0, reseta a cada Executar)"),
+            ("count", "{count}", "total de cliques em Executar na sessão (começa em 1, acumula)"),
+            ("py",    "{py}",    "último resultado de funcao_py com colar=false (reseta a cada iteração)"),
+        ]:
+            self._ins(f"    ")
+            self._ins(f"{var:<8}", "ph")
+            self._ins(f"ou  ", "muted")
+            self._ins(f"{ph:<10}", "ph")
             self._ins(f"{desc}\n", "body")
+        self._nl()
         self._code("""\
-{ "teclado": { "digitar":      "Arquivo_{count}_linha_{i}" } }
-{ "teclado": { "campo_tabela": "NOME"                      } }
-{ "printscreen": { "pasta": "C:/prints", "nome_arquivo": "Print_{count}_{i}", "formato": "png" } }
-{ "teclado": { "pressionar": "tab" }, "repetir": "count + i" }
-{ "teclado": { "funcao_py": "extrair_tabela_do_from", "colar": false } }
-{ "printscreen": { "pasta": "C:/prints", "nome_arquivo": "PRINT_{py}_iter{i}", "formato": "png" } }""")
+teclado_digitar("Arquivo_{count}_linha_{i}")
+teclado_digitar([NOME])                          -- coluna da tabela
+mouse(x=400, y=42 + i * 20, acao="clicar_esquerdo")
+teclado_pressionar("tab", repetir=count + i)
+printscreen(pasta="C:/p", nome_arquivo="Print_{count}_{i}_[CAMPO]",
+            formato="png", sobrescrever=false, x=0, y=0, largura=1920, altura=1080)""")
 
     # ── 7. Tabelas CSV ────────────────────────────────────────────────────────
 
@@ -1347,9 +1609,18 @@ ID;NOME;EMAIL;STATUS
 2;Maria Santos;maria@email.com;
 3;Pedro Alves;pedro@email.com;""")
         self._ins("  Comportamento da coluna STATUS:\n", "h3")
-        self._item("(vazio)",   "registro pendente — será processado na próxima execução", "value")
-        self._item("OK",        "registro já processado — ignorado nas próximas execuções", "action")
+        self._item("(vazio)", "registro pendente — será processado na próxima execução", "value")
+        self._item("OK",      "registro já processado — ignorado nas próximas execuções", "action")
         self._note("Rollback automático: se a iteração falhar ou for interrompida, o STATUS não é gravado.")
+        self._nl()
+        self._ins("  Referência a tabelas no roteiro:\n", "body")
+        self._code("""\
+teclado_digitar([NOME])            -- tabela selecionada no dropdown
+teclado_digitar([clientes.EMAIL])  -- tabela específica
+teclado_digitar([NOME], variavel_py=true)  -- lê sem digitar, guarda em py""")
+        self._bullet("Ao concluir a iteração com sucesso  →  STATUS = OK na linha usada")
+        self._bullet("Se houver erro ou interrupção  →  rollback automático")
+        self._bullet("É possível usar mais de uma tabela no mesmo roteiro")
 
     # ── 8. Exemplos ───────────────────────────────────────────────────────────
 
@@ -1358,75 +1629,52 @@ ID;NOME;EMAIL;STATUS
 
         self._sub("8.1  Fluxo básico com tabela")
         self._code("""\
-[
-  { "secao": "PREENCHER FORMULÁRIO" },
+secao("PREENCHER FORMULÁRIO")
 
-  { "info": "Clicar no campo nome",
-    "mouse":   { "x": 400, "y": 300, "acao": "clicar_esquerdo" } },
+mouse(x=400, y=300, acao="clicar_esquerdo", info="Clicar no campo nome")
+teclado_digitar([NOME], info="Digitar nome da tabela")
+teclado_pressionar("tab")
+teclado_atalho("ctrl+s", info="Salvar registro")
+esperar(1.0)""")
 
-  { "info": "Digitar nome da tabela",
-    "teclado": { "campo_tabela": "NOME" } },
-
-  { "info": "Avançar campo",
-    "teclado": { "pressionar": "tab" } },
-
-  { "info": "Salvar registro",
-    "teclado": { "atalho": "ctrl+s" },
-    "esperar": { "depois": 1.0 } }
-]""")
-
-        self._sub("8.2  Print com nome dinâmico e região")
+        self._sub("8.2  Print com nome dinâmico")
         self._code("""\
-[
-  { "secao": "CAPTURAR TELA" },
+secao("CAPTURAR TELA")
 
-  { "info": "Aguardar carregamento",
-    "esperar": { "depois": 2.0 } },
-
-  { "info": "Salvar print",
-    "printscreen": {
-      "pasta":        "C:/prints/exec_{count}",
-      "nome_arquivo": "[tabela.CODIGO]_iter{i}",
-      "formato":      "png",
-      "sobrescrever": true,
-      "regiao": { "x": 0, "y": 0, "largura": 1920, "altura": 1040 }
-    }
-  }
-]""")
+esperar(2.0)
+printscreen(pasta="C:/prints/exec_{count}",
+            nome_arquivo="[tabela.CODIGO]_iter{i}",
+            formato="png", sobrescrever=true,
+            x=0, y=0, largura=1920, altura=1040)""")
 
         self._sub("8.3  Drag and drop")
         self._code("""\
-[
-  { "secao": "ARRASTAR ELEMENTO" },
+secao("ARRASTAR ELEMENTO")
 
-  { "info": "Segurar item",
-    "mouse": { "x": 200, "y": 300, "acao": "clicar_segurar" },
-    "esperar": { "depois": 0.3 } },
+mouse(x=200, y=300, acao="clicar_segurar", info="Segurar item")
+esperar(0.3)
+mouse(x=600, y=300, acao="mover", info="Mover para destino")
+esperar(0.1)
+mouse(x=600, y=300, acao="clicar_soltar", info="Soltar item")
+esperar(1.5)""")
 
-  { "info": "Mover para destino",
-    "mouse": { "x": 600, "y": 300, "acao": "mover" },
-    "esperar": { "depois": 0.1 } },
-
-  { "info": "Soltar item",
-    "mouse": { "x": 600, "y": 300, "acao": "clicar_soltar" },
-    "esperar": { "depois": 1.5 } }
-]""")
-
-        self._sub("8.4  Múltiplas tabelas + count + secao")
+        self._sub("8.4  Encadeamento de funcao_py via py")
         self._code("""\
-[
-  { "secao": "EXECUÇÃO {count} — CADASTRO DUPLO" },
+secao("TRANSFORMAR E DIGITAR")
 
-  { "info": "Campo A — tabela_a",
-    "teclado": { "campo_tabela": "tabela_a.NOME" } },
+teclado_atalho("ctrl+c")
+esperar(0.3)
+teclado_funcao_py("extrair_tabela_do_from", colar=false)  -- clipboard → py
+teclado_funcao_py("trocar_prefixo_tabela_rf", colar=true) -- py → digita""")
 
-  { "info": "Campo B — tabela_b",
-    "teclado": { "campo_tabela": "tabela_b.CODIGO" } },
+        self._sub("8.5  Múltiplas tabelas")
+        self._code("""\
+secao("CADASTRO COM DUAS TABELAS")
 
-  { "info": "Confirmar e aguardar",
-    "teclado": { "pressionar": "enter" },
-    "esperar": { "depois": 0.5 } }
-]""")
+teclado_digitar([tabela_a.NOME], info="Campo A")
+teclado_digitar([tabela_b.CODIGO], info="Campo B")
+teclado_pressionar("enter")
+esperar(0.5)""")
         self._nl(3)
 
 
@@ -1493,6 +1741,7 @@ class AutomationApp(tk.Tk):
         self.script_combo.pack(side="left", padx=(4, 2))
         self.script_combo.bind("<<ComboboxSelected>>", lambda _e: self.load_selected_script())
         ttk.Button(row0, text="Salvar", command=self.save_script_from_main).pack(side="left", padx=2)
+        ttk.Button(row0, text="JSON → DSL", command=self.convert_to_dsl).pack(side="left", padx=(8, 2))
 
         exec_lf = ttk.LabelFrame(toolbar, text="Execução", padding=6)
         exec_lf.pack(side="left", fill="y", padx=(6, 0))
@@ -1605,13 +1854,18 @@ class AutomationApp(tk.Tk):
         self.script_text.bind("<MouseWheel>", lambda _event: self.after(10, self._update_line_numbers))
         self.script_text.bind("<Button-4>", lambda _event: self.after(10, self._update_line_numbers))
         self.script_text.bind("<Button-5>", lambda _event: self.after(10, self._update_line_numbers))
+        self._autocomplete = DslAutocomplete(self.script_text, self.get_table_columns)
 
     def _configure_script_tags(self) -> None:
-        self.script_text.tag_configure("json_key", foreground="#93c5fd")
-        self.script_text.tag_configure("json_string", foreground="#86efac")
-        self.script_text.tag_configure("json_number", foreground="#fca5a5")
-        self.script_text.tag_configure("json_boolean", foreground="#f9a8d4")
-        self.script_text.tag_configure("json_brace", foreground="#cbd5e1")
+        t = self.script_text
+        t.tag_configure("dsl_func",    foreground="#60a5fa", font=("Consolas", 10, "bold"))
+        t.tag_configure("dsl_string",  foreground="#86efac")
+        t.tag_configure("dsl_bracket", foreground="#fb923c", font=("Consolas", 10, "bold"))
+        t.tag_configure("dsl_comment", foreground="#4b5563", font=("Consolas", 10, "italic"))
+        t.tag_configure("dsl_number",  foreground="#fca5a5")
+        t.tag_configure("dsl_bool",    foreground="#c4b5fd")
+        t.tag_configure("dsl_var",     foreground="#fbbf24")
+        t.tag_configure("dsl_param",   foreground="#67e8f9")
 
     def _configure_console_tags(self) -> None:
         self.console_text.tag_configure(ConsoleTag.DEFAULT.value, foreground="#e5e7eb")
@@ -1635,7 +1889,7 @@ class AutomationApp(tk.Tk):
         self._highlight_after_id = self.after(Constants.HIGHLIGHT_DEBOUNCE_MS, self._refresh_script_view)
 
     def _refresh_script_view(self) -> None:
-        self.apply_json_highlight()
+        self._apply_dsl_highlight()
         self._update_line_numbers()
 
     def _update_line_numbers(self) -> None:
@@ -1658,36 +1912,78 @@ class AutomationApp(tk.Tk):
         self.script_text.yview(*args)
         self.line_numbers.yview(*args)
 
-    def apply_json_highlight(self) -> None:
+    _DSL_TAGS = ("dsl_func", "dsl_string", "dsl_bracket", "dsl_comment",
+                 "dsl_number", "dsl_bool", "dsl_var", "dsl_param")
+    _DSL_FUNC_RE = re.compile(
+        r"\b(" + "|".join(sorted(DSL_FUNC_NAMES, key=len, reverse=True)) + r")\b"
+    )
+    _DSL_PARAM_RE  = re.compile(r"\b([a-zA-Z_]\w*)\s*(?==)")
+    _DSL_STRING_RE = re.compile(r'"[^"]*"')
+    _DSL_BRACKET_RE = re.compile(r"\[[^\[\]]+\]")
+    _DSL_NUMBER_RE = re.compile(r"(?<!['\w])-?\b\d+(?:\.\d+)?\b")
+    _DSL_BOOL_RE   = re.compile(r"\b(true|false)\b")
+    _DSL_VAR_RE    = re.compile(r"\b(i|count|py)\b")
+
+    def _apply_dsl_highlight(self) -> None:
         content = self.script_text.get("1.0", "end-1c")
-        for tag in ("json_key", "json_string", "json_number", "json_boolean", "json_brace"):
+
+        # Legacy JSON: fall back to minimal brace/string colouring
+        if not is_dsl_content(content):
+            for tag in self._DSL_TAGS:
+                self.script_text.tag_remove(tag, "1.0", tk.END)
+            for m in re.finditer(r'"[^"]*"', content):
+                self.script_text.tag_add("dsl_string", f"1.0+{m.start()}c", f"1.0+{m.end()}c")
+            return
+
+        for tag in self._DSL_TAGS:
             self.script_text.tag_remove(tag, "1.0", tk.END)
 
-        for match in re.finditer(r'"([^"\\]*(?:\\.[^"\\]*)*)"\s*:', content):
-            start = f"1.0+{match.start()}c"
-            end = f"1.0+{match.end() - 1}c"
-            self.script_text.tag_add("json_key", start, end)
+        def _tag(tag: str, start: int, end: int) -> None:
+            self.script_text.tag_add(tag, f"1.0+{start}c", f"1.0+{end}c")
 
-        for match in re.finditer(r':\s*"([^"\\]*(?:\\.[^"\\]*)*)"', content):
-            colon_position = match.group(0).find('"')
-            start = f"1.0+{match.start() + colon_position}c"
-            end = f"1.0+{match.end()}c"
-            self.script_text.tag_add("json_string", start, end)
+        # Process line by line to properly handle comments and string ranges
+        offset = 0
+        for line in content.split("\n"):
+            comment_pos = find_comment_pos(line)
+            code = line[:comment_pos] if comment_pos >= 0 else line
 
-        for match in re.finditer(r"\b-?\d+(?:\.\d+)?\b", content):
-            start = f"1.0+{match.start()}c"
-            end = f"1.0+{match.end()}c"
-            self.script_text.tag_add("json_number", start, end)
+            # Collect string ranges so other patterns skip inside them
+            string_ranges: list[tuple[int, int]] = []
+            for m in self._DSL_STRING_RE.finditer(code):
+                string_ranges.append((m.start(), m.end()))
+                _tag("dsl_string", offset + m.start(), offset + m.end())
 
-        for match in re.finditer(r"\b(true|false|null)\b", content):
-            start = f"1.0+{match.start()}c"
-            end = f"1.0+{match.end()}c"
-            self.script_text.tag_add("json_boolean", start, end)
+            def _outside_strings(start: int, end: int) -> bool:
+                return not any(s <= start < e for s, e in string_ranges)
 
-        for match in re.finditer(r"[\{\}\[\]]", content):
-            start = f"1.0+{match.start()}c"
-            end = f"1.0+{match.end()}c"
-            self.script_text.tag_add("json_brace", start, end)
+            for m in self._DSL_FUNC_RE.finditer(code):
+                if _outside_strings(m.start(), m.end()):
+                    _tag("dsl_func", offset + m.start(), offset + m.end())
+
+            for m in self._DSL_PARAM_RE.finditer(code):
+                if _outside_strings(m.start(), m.end()):
+                    _tag("dsl_param", offset + m.start(), offset + m.end())
+
+            for m in self._DSL_BRACKET_RE.finditer(code):
+                if _outside_strings(m.start(), m.end()):
+                    _tag("dsl_bracket", offset + m.start(), offset + m.end())
+
+            for m in self._DSL_NUMBER_RE.finditer(code):
+                if _outside_strings(m.start(), m.end()):
+                    _tag("dsl_number", offset + m.start(), offset + m.end())
+
+            for m in self._DSL_BOOL_RE.finditer(code):
+                if _outside_strings(m.start(), m.end()):
+                    _tag("dsl_bool", offset + m.start(), offset + m.end())
+
+            for m in self._DSL_VAR_RE.finditer(code):
+                if _outside_strings(m.start(), m.end()):
+                    _tag("dsl_var", offset + m.start(), offset + m.end())
+
+            if comment_pos >= 0:
+                _tag("dsl_comment", offset + comment_pos, offset + len(line))
+
+            offset += len(line) + 1  # +1 for \n
 
     def _refresh_dropdown(self, combo: ttk.Combobox, var: tk.StringVar, directory: Path, pattern: str) -> None:
         values = [""] + [path.stem for path in sorted(directory.glob(pattern))]
@@ -1700,6 +1996,24 @@ class AutomationApp(tk.Tk):
 
     def refresh_table_dropdown(self) -> None:
         self._refresh_dropdown(self.table_combo, self.selected_table_var, Paths.TABELAS_DIR, "*.csv")
+
+    def get_table_columns(self) -> list[str]:
+        name = self.selected_table_var.get().strip()
+        if not name:
+            return []
+        path = Paths.TABELAS_DIR / f"{name}.csv"
+        if not path.exists():
+            return []
+        try:
+            with path.open("r", encoding="utf-8-sig", newline="") as fh:
+                sample = fh.read(Constants.CSV_BUFFER_SIZE)
+                fh.seek(0)
+                delim = ";" if sample.count(";") >= sample.count(",") else ","
+                reader = csv.DictReader(fh, delimiter=delim)
+                next(reader, None)
+                return [c for c in (reader.fieldnames or []) if c != "STATUS"]
+        except Exception:
+            return []
 
     def open_help(self) -> None:
         HelpWindow(self)
@@ -1725,9 +2039,9 @@ class AutomationApp(tk.Tk):
         name = self.script_name_var.get().strip() or "roteiro_principal"
         content = self.script_text.get("1.0", tk.END).strip()
         try:
-            _parse_script_json(content)
+            _parse_script_content(content)
         except (json.JSONDecodeError, ValueError) as exc:
-            messagebox.showerror("Erro de JSON", str(exc))
+            messagebox.showerror("Erro no roteiro", str(exc))
             return
 
         path = Paths.ROTEIROS_DIR / f"{name}.json"
@@ -1737,13 +2051,28 @@ class AutomationApp(tk.Tk):
         self.log(f"Roteiro salvo: {path.name}", ConsoleTag.SUCCESS.value)
         messagebox.showinfo("OK", f"Roteiro salvo: {path.name}")
 
+    def convert_to_dsl(self) -> None:
+        content = self.script_text.get("1.0", tk.END).strip()
+        if not content:
+            messagebox.showwarning("Aviso", "Editor vazio.")
+            return
+        if is_dsl_content(content):
+            messagebox.showinfo("Info", "O roteiro já está em formato DSL.")
+            return
+        try:
+            steps = _parse_script_content(content)
+            self.set_script_text(json_to_dsl(steps))
+            self.log("Roteiro convertido para DSL.", ConsoleTag.SUCCESS.value)
+        except Exception as exc:
+            messagebox.showerror("Erro na conversão", str(exc))
+
     def start_execution(self) -> None:
         if self.worker_thread and self.worker_thread.is_alive():
             messagebox.showwarning("Aviso", "Já existe uma execução em andamento.")
             return
 
         try:
-            steps = _parse_script_json(self.script_text.get("1.0", tk.END).strip())
+            steps = _parse_script_content(self.script_text.get("1.0", tk.END).strip())
             repetitions = int(self.repetitions_var.get())
             float(self.start_delay_var.get())
             float(self.delay_var.get())

@@ -6,72 +6,57 @@
 1. ESTRUTURA GERAL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-O roteiro é uma LISTA JSON onde cada elemento é um passo.
+Um comando por linha. Comentários com --.
+Parâmetros marcados com ? são opcionais — basta omiti-los.
 
-[
-  { "secao": "Bloco 1" },
-  { "info": "Clicar no campo", "mouse": {"x": 250, "y": 400, "acao": "clicar_esquerdo"} },
-  { "info": "Digitar valor",   "teclado": {"campo_tabela": "NOME"} },
-  { "info": "Salvar",          "teclado": {"atalho": "ctrl+s"} }
-]
+Variáveis disponíveis:
+  i      → índice da iteração atual (começa em 0)
+  count  → total de execuções na sessão (começa em 1, acumula)
+  py     → último resultado de teclado_funcao_py com colar=false
+             (reseta a cada iteração)
 
-Regras gerais:
-  • Cada passo pode ter somente 1 ação principal: mouse, teclado OU printscreen.
-  • "info", "esperar", "repetir" e "secao" são auxiliares e podem aparecer em qualquer passo.
-  • Passos sem ação (somente "info" ou "secao") são ignorados pelo motor.
+Referências de tabela CSV:
+  [CAMPO]          → coluna da tabela selecionada no dropdown
+  [tabela.CAMPO]   → coluna de uma tabela específica
+
+Dentro de strings, use {i}, {count}, {py} como placeholders:
+  teclado_digitar("Arquivo_{count}_linha_{i}")
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-2. CAMPOS AUXILIARES
+2. AUXILIARES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-┌─ info ──────────────────────────────────────────────────────┐
-│ Descrição exibida no console durante a execução.            │
+┌─ secao("texto") ────────────────────────────────────────────┐
+│ Marcador de bloco. Aparece em amarelo no console.           │
+│ Não executa nenhuma ação.                                   │
 │                                                             │
-│ "info": "Abrindo janela de busca"                           │
+│ secao("PARTE 1 — ABRIR VIEW")                               │
 └─────────────────────────────────────────────────────────────┘
 
-┌─ secao ─────────────────────────────────────────────────────┐
-│ Marca um bloco lógico no roteiro. Aparece no console com    │
-│ destaque visual (amarelo) e não executa nenhuma ação.       │
+┌─ esperar(segundos) ─────────────────────────────────────────┐
+│ Pausa de N segundos.                                        │
 │                                                             │
-│ {"secao": "PARTE 1 — ABRIR VIEW"}                           │
-│ {"secao": "PARTE 2 — TIRAR PRINT"}                          │
+│ esperar(0.5)                                                │
+│ esperar(1.0)                                                │
 └─────────────────────────────────────────────────────────────┘
 
-┌─ esperar ───────────────────────────────────────────────────┐
-│ Define pausas em segundos antes e/ou depois da ação.        │
+┌─ ?repetir e ?info em qualquer ação ─────────────────────────┐
+│ Todo comando de ação aceita repetir e info opcionais.       │
 │                                                             │
-│ "esperar": {"antes": 1.0, "depois": 0.5}                    │
+│ teclado_pressionar("tab", repetir=3, info="Avançar campos") │
+│ mouse(x=400, y=300, acao="clicar_esquerdo", repetir=i+1)    │
+│ teclado_pressionar("tab", repetir=count*2)                  │
 │                                                             │
-│ Subitens:                                                   │
-│   antes  → pausa antes de executar a ação                   │
-│   depois → pausa após executar a ação                       │
-└─────────────────────────────────────────────────────────────┘
-
-┌─ repetir ───────────────────────────────────────────────────┐
-│ Repete o passo atual N vezes.                               │
-│                                                             │
-│ "repetir": 3          → repete 3 vezes                      │
-│ "repetir": "i + 1"    → usa o índice da iteração            │
-│ "repetir": "count"    → usa o contador de execuções         │
-│ "repetir": "count*2"  → expressão com count                 │
-│                                                             │
-│ Variáveis disponíveis:                                      │
-│   i     → índice da iteração atual (começa em 0)            │
-│   count → número de execuções acumuladas (começa em 1)      │
-│                                                             │
-│ Operadores: + - * / // % **                                 │
+│ repetir aceita expressões: i, count, +, -, *, /, //, %, ** │
 └─────────────────────────────────────────────────────────────┘
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-3. AÇÃO MOUSE
+3. MOUSE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-"mouse": { "x": 800, "y": 500, "acao": "clicar_esquerdo" }
-
-Campos obrigatórios: x, y, acao
+mouse(x=, y=, acao="", ?repetir=1, ?info="")
 
 Ações disponíveis:
   clicar_esquerdo  → clique simples com botão esquerdo
@@ -81,40 +66,52 @@ Ações disponíveis:
   clicar_segurar   → pressiona e segura o botão esquerdo
   clicar_soltar    → solta o botão esquerdo
 
-Dica — arrastar um elemento:
-  {"mouse": {"x": 200, "y": 300, "acao": "clicar_segurar"}, "esperar": {"depois": 0.3}},
-  {"mouse": {"x": 600, "y": 300, "acao": "mover"},          "esperar": {"depois": 0.1}},
-  {"mouse": {"x": 600, "y": 300, "acao": "clicar_soltar"}}
+x e y aceitam expressões aritméticas com i e count:
+  mouse(x=400, y=42 + i * 20, acao="clicar_esquerdo")
+  -- i=0 → y=42  |  i=1 → y=62  |  i=2 → y=82
+
+Drag & drop:
+  mouse(x=200, y=300, acao="clicar_segurar")
+  esperar(0.3)
+  mouse(x=600, y=300, acao="mover")
+  esperar(0.1)
+  mouse(x=600, y=300, acao="clicar_soltar")
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-4. AÇÃO TECLADO
+4. TECLADO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-O objeto "teclado" deve ter exatamente UMA chave por passo.
-
-┌─ digitar ───────────────────────────────────────────────────┐
-│ Cola um texto no campo com foco atual.                      │
+┌─ teclado_digitar(valor, ?variavel_py=false, ?repetir, ?info) ┐
+│ Cola o valor no campo com foco.                             │
 │                                                             │
-│ "teclado": {"digitar": "texto fixo"}                        │
-│ "teclado": {"digitar": "Arquivo_{i}"}                       │
-│ "teclado": {"digitar": "Execucao_{count}"}                  │
+│ valor pode ser:                                             │
+│   "texto fixo"          → texto literal                     │
+│   "Arquivo_{i}"         → string com placeholder            │
+│   [NOME]                → coluna da tabela no dropdown      │
+│   [clientes.EMAIL]      → coluna de tabela específica       │
+│   py                    → último resultado de funcao_py     │
+│                                                             │
+│ Com variavel_py=true: lê o valor mas NÃO digita,            │
+│ armazena em py para uso posterior.                          │
+│                                                             │
+│ teclado_digitar([NOME], variavel_py=true)  -- guarda em py  │
+│ teclado_funcao_py("upper", colar=true)     -- aplica e cola │
 └─────────────────────────────────────────────────────────────┘
 
-┌─ atalho ────────────────────────────────────────────────────┐
+┌─ teclado_atalho(teclas, ?repetir, ?info) ───────────────────┐
 │ Executa uma combinação de teclas (hotkey).                  │
 │                                                             │
-│ "teclado": {"atalho": "ctrl+s"}                             │
-│ "teclado": {"atalho": "ctrl+shift+a"}                       │
-│ "teclado": {"atalho": "alt+f4"}                             │
+│ teclado_atalho("ctrl+s")                                    │
+│ teclado_atalho("ctrl+shift+a")                              │
+│ teclado_atalho("alt+f4")                                    │
 └─────────────────────────────────────────────────────────────┘
 
-┌─ pressionar ────────────────────────────────────────────────┐
+┌─ teclado_pressionar(tecla, ?repetir, ?info) ────────────────┐
 │ Pressiona uma única tecla.                                  │
 │                                                             │
-│ "teclado": {"pressionar": "enter"}                          │
-│ "teclado": {"pressionar": "tab"}                            │
-│ "teclado": {"pressionar": "F8"}                             │
+│ teclado_pressionar("enter")                                 │
+│ teclado_pressionar("tab", repetir=3)                        │
 │                                                             │
 │ Teclas comuns:                                              │
 │   enter, tab, esc, space, backspace, delete                 │
@@ -123,87 +120,71 @@ O objeto "teclado" deve ter exatamente UMA chave por passo.
 │   F1 … F12                                                  │
 └─────────────────────────────────────────────────────────────┘
 
-┌─ campo_tabela ──────────────────────────────────────────────┐
-│ Lê o próximo registro pendente de uma tabela CSV e cola     │
-│ o valor da coluna indicada no campo com foco.               │
+┌─ teclado_funcao_py(funcao, colar, ?repetir, ?info) ─────────┐
+│ Aplica função de transformacoes.py sobre o clipboard.       │
 │                                                             │
-│ Usando tabela selecionada no dropdown:                      │
-│   "teclado": {"campo_tabela": "NOME"}                       │
+│ colar=true  → aplica e cola o resultado                     │
+│ colar=false → aplica e guarda em py (não cola)              │
 │                                                             │
-│ Usando tabela específica:                                   │
-│   "teclado": {"campo_tabela": "clientes.EMAIL"}             │
+│ teclado_atalho("ctrl+c")                                    │
+│ esperar(0.3)                                                │
+│ teclado_funcao_py("upper", colar=true)                      │
 │                                                             │
-│ Como funciona:                                              │
-│   1. O app pega o próximo registro com STATUS ≠ OK          │
-│   2. Reserva esse registro para a iteração atual            │
-│   3. Se a iteração concluir sem erros → STATUS = OK         │
-│   4. Se houver erro ou interrupção → registro volta         │
-│      para a fila (rollback automático)                      │
-│   5. É possível usar mais de uma tabela no mesmo roteiro    │
-└─────────────────────────────────────────────────────────────┘
-
-┌─ funcao_py ─────────────────────────────────────────────────┐
-│ Aplica uma função de transformacoes.py sobre o texto        │
-│ selecionado na tela.                                        │
+│ Encadeamento via py:                                        │
+│ teclado_funcao_py("extrair_tabela_do_from", colar=false)    │
+│ teclado_funcao_py("trocar_prefixo_tabela_rf", colar=true)   │
 │                                                             │
-│ "teclado": {"funcao_py": "NOME_DA_FUNCAO"}                  │
-│                                                             │
-│ Fluxo:                                                      │
-│   1. Copia o texto selecionado (Ctrl+C)                     │
-│   2. Passa para a função definida em transformacoes.py      │
-│   3. Cola o resultado (Ctrl+V) no mesmo campo               │
+│ Funções disponíveis (transformacoes.py):                    │
+│   manter, upper, lower, strip, somente_digitos,             │
+│   remover_espacos, capitalizar, alias_uppercase,            │
+│   trocar_prefixo_tabela_rf, extrair_tabela_do_from, mandt   │
 └─────────────────────────────────────────────────────────────┘
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-5. AÇÃO PRINTSCREEN
+5. PRINTSCREEN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-"printscreen": {
-  "pasta":        "C:/prints",
-  "nome_arquivo": "Print_[clientes.NOME]_{count}",
-  "formato":      "png",
-  "sobrescrever": true,
-  "regiao": { "x": 0, "y": 0, "largura": 1920, "altura": 1080 }
-}
+Todos os parâmetros são OBRIGATÓRIOS:
 
-Campos:
-  pasta         (obrigatório) → caminho da pasta de destino
-                                 criada automaticamente se não existir
-  nome_arquivo  (obrigatório) → nome do arquivo sem extensão
-                                 aceita valores dinâmicos com [ ]
-  formato       (opcional)    → png (padrão), jpg, jpeg, bmp
-  sobrescrever  (opcional)    → true/false (padrão: false)
-  regiao        (opcional)    → captura apenas a área indicada
+printscreen(pasta="C:/prints",
+            nome_arquivo="Print_{count}_{i}_[CAMPO]",
+            formato="png",
+            sobrescrever=false,
+            x=0, y=0, largura=1920, altura=1080)
 
-Valores dinâmicos no nome_arquivo:
-  [CAMPO]           → coluna da tabela selecionada no dropdown
-  [tabela.CAMPO]    → coluna de tabela específica
-  {count}           → número de execuções acumuladas
-  {i}               → índice da iteração atual
+Parâmetros:
+  pasta         → caminho da pasta de destino (criada se não existir)
+  nome_arquivo  → nome do arquivo sem extensão — aceita [CAMPO] e {placeholders}
+  formato       → png | jpg | jpeg | bmp
+  sobrescrever  → true = substitui existente, false = erro se já existir
+  x, y          → coordenada superior esquerda da região capturada
+  largura, altura → dimensões da região em pixels
 
-  Exemplos:
-    "nome_arquivo": "Documento_2025"
-    "nome_arquivo": "[CODIGO]_[DESCRICAO]"
-    "nome_arquivo": "Print_[clientes.NOME]_{count}"
-    "nome_arquivo": "Execucao_{count}_iter_{i}"
+Valores dinâmicos em nome_arquivo:
+  [CAMPO]          → coluna da tabela selecionada no dropdown
+  [tabela.CAMPO]   → coluna de tabela específica
+  {count}          → número de execuções acumuladas
+  {i}              → índice da iteração atual
+  {py}             → último resultado de funcao_py
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-6. PLACEHOLDERS
+6. VARIÁVEIS E PLACEHOLDERS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Disponíveis em: digitar, campo_tabela, nome_arquivo, repetir.
+Como argumento direto:
+  mouse(x=400, y=42 + i * 20, ...)
+  teclado_pressionar("tab", repetir=count + i)
+  teclado_digitar(py)
 
-  {i}      → índice da iteração atual dentro da execução (começa em 0)
-  {count}  → contador total de execuções do botão Executar (começa em 1)
-             é persistente entre execuções da mesma sessão
+Como {placeholder} dentro de strings:
+  teclado_digitar("Arquivo_{count}_linha_{i}")
+  printscreen(..., nome_arquivo="Print_{count}_{i}_{py}", ...)
 
-Exemplos:
-  "digitar": "Item número {i}"
-  "digitar": "Execução {count}, iteração {i}"
-  "nome_arquivo": "Print_{count}_{i}"
-  "repetir": "count + i"
+  {i}      → índice da iteração (começa em 0)
+  {count}  → total de execuções na sessão (começa em 1, acumula)
+  {py}     → último resultado de funcao_py com colar=false
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -212,11 +193,16 @@ Exemplos:
 
   • Separador preferencial: ponto e vírgula ( ; )
   • Deve ter cabeçalho na primeira linha
-  • A coluna STATUS é gerenciada automaticamente pelo app:
+  • A coluna STATUS é gerenciada automaticamente:
       — criada se não existir
       — preenchida com "OK" ao concluir cada iteração com sucesso
       — registros com STATUS=OK são ignorados nas próximas execuções
   • Ao registrar erro ou interromper, o registro volta para a fila
+
+Referências no roteiro:
+  teclado_digitar([NOME])            -- tabela do dropdown
+  teclado_digitar([clientes.EMAIL])  -- tabela específica
+  teclado_digitar([NOME], variavel_py=true)  -- lê sem digitar
 
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -225,79 +211,49 @@ Exemplos:
 
 ──── 8.1 Fluxo básico com tabela ────────────────────────────
 
-[
-  {"secao": "PREENCHER FORMULÁRIO"},
+secao("PREENCHER FORMULÁRIO")
 
-  {"info": "Clicar no campo nome",
-   "mouse": {"x": 400, "y": 300, "acao": "clicar_esquerdo"}},
-
-  {"info": "Digitar nome da tabela",
-   "teclado": {"campo_tabela": "NOME"}},
-
-  {"info": "Pressionar Tab",
-   "teclado": {"pressionar": "tab"}},
-
-  {"info": "Salvar registro",
-   "teclado": {"atalho": "ctrl+s"},
-   "esperar": {"depois": 1.0}}
-]
+mouse(x=400, y=300, acao="clicar_esquerdo", info="Clicar no campo nome")
+teclado_digitar([NOME], info="Digitar nome da tabela")
+teclado_pressionar("tab")
+teclado_atalho("ctrl+s", info="Salvar registro")
+esperar(1.0)
 
 ──── 8.2 Print com nome dinâmico ────────────────────────────
 
-[
-  {"secao": "CAPTURAR TELA"},
+secao("CAPTURAR TELA")
 
-  {"info": "Aguardar carregamento",
-   "esperar": {"depois": 2.0}},
+esperar(2.0)
+printscreen(pasta="C:/prints/execucao_{count}",
+            nome_arquivo="[tabela.CODIGO]_{i}",
+            formato="png", sobrescrever=true,
+            x=0, y=0, largura=1920, altura=1040)
 
-  {"info": "Salvar print",
-   "printscreen": {
-     "pasta":        "C:/prints/execucao_{count}",
-     "nome_arquivo": "[tabela.CODIGO]_{i}",
-     "formato":      "png",
-     "sobrescrever": true,
-     "regiao": {"x": 0, "y": 0, "largura": 1920, "altura": 1040}
-   }}
-]
+──── 8.3 Drag and drop ──────────────────────────────────────
 
-──── 8.3 Arrastar elemento ──────────────────────────────────
+secao("ARRASTAR ELEMENTO")
 
-[
-  {"secao": "DRAG AND DROP"},
+mouse(x=200, y=300, acao="clicar_segurar", info="Segurar item")
+esperar(0.3)
+mouse(x=600, y=300, acao="mover", info="Mover para destino")
+esperar(0.1)
+mouse(x=600, y=300, acao="clicar_soltar", info="Soltar item")
+esperar(1.5)
 
-  {"info": "Segurar item",
-   "mouse": {"x": 200, "y": 300, "acao": "clicar_segurar"},
-   "esperar": {"depois": 0.3}},
+──── 8.4 Encadeamento de funcao_py ──────────────────────────
 
-  {"info": "Mover para destino",
-   "mouse": {"x": 600, "y": 300, "acao": "mover"},
-   "esperar": {"depois": 0.1}},
+secao("TRANSFORMAR E DIGITAR")
 
-  {"info": "Soltar item",
-   "mouse": {"x": 600, "y": 300, "acao": "clicar_soltar"},
-   "esperar": {"depois": 1.5}}
-]
+teclado_atalho("ctrl+c")
+esperar(0.3)
+teclado_funcao_py("extrair_tabela_do_from", colar=false)
+teclado_funcao_py("trocar_prefixo_tabela_rf", colar=true)
 
-──── 8.4 Usar count em repetir ──────────────────────────────
+──── 8.5 Múltiplas tabelas ──────────────────────────────────
 
-[
-  {"info": "Pressionar Tab conforme execução",
-   "teclado": {"pressionar": "tab"},
-   "repetir": "count"}
-]
+secao("CADASTRO COM DUAS TABELAS")
 
-──── 8.5 Múltiplas tabelas no mesmo roteiro ─────────────────
-
-[
-  {"secao": "CADASTRO COM DUAS TABELAS"},
-
-  {"info": "Campo A — tabela_a",
-   "teclado": {"campo_tabela": "tabela_a.NOME"}},
-
-  {"info": "Campo B — tabela_b",
-   "teclado": {"campo_tabela": "tabela_b.CODIGO"}},
-
-  {"info": "Confirmar",
-   "teclado": {"pressionar": "enter"},
-   "esperar": {"depois": 0.5}}
-]
+teclado_digitar([tabela_a.NOME], info="Campo A")
+teclado_digitar([tabela_b.CODIGO], info="Campo B")
+teclado_pressionar("enter")
+esperar(0.5)
