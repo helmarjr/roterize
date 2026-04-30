@@ -1,158 +1,57 @@
-[
-  {
-    "info": "Roteiro para Printar Tabelas Datasphere"
-  },
+-- Roteiro para Printar Tabelas Datasphere
 
+mouse(x=3333, y=42, acao="clicar_esquerdo", info="Foco no EDGE")
 
- {
-    "info": "Foco no EDGE",
-    "mouse": {"x": 3333, "y": 42, "acao": "clicar_esquerdo"},
-    "esperar": {"depois": 0}
-  },
+secao("Prepara primeira URL")
 
+teclado_atalho("ctrl+t", info="Nova ABA")
 
+teclado_digitar("https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[1515_tabelas1.DS_TABELA]", info="Cola nome CDSView")
 
-{ "secao": "Prepara primeira URL" },
+teclado_pressionar("enter", info="Localizar")
 
+secao("Prepara segunda URL")
 
-{
-    "info": "Nova ABA",
-    "teclado": {"atalho":"ctrl+t"},
-    "esperar": {"depois": 0}
-  },
-  {
-    "info": "Cola nome CDSView",
-    "teclado": {"digitar": "https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[1515_tabelas1.DS_TABELA]"},
-    "esperar": {"depois": 0}
-  },
-  {
-    "info": "Localizar",
-    "teclado": {"pressionar": "enter"},
-    "esperar": {"depois": 0}
-  },
+teclado_atalho("ctrl+t", info="Nova ABA")
 
+teclado_digitar("https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[1515_tabelas2.DS_TABELA]", info="Cola nome CDSView")
 
+teclado_pressionar("enter", info="Localizar")
 
-{ "secao": "Prepara segunda URL" },
+secao("Prepara terceira URL")
 
-{
-    "info": "Nova ABA",
-    "teclado": {"atalho":"ctrl+t"},
-    "esperar": {"depois": 0}
-  },
-  {
-    "info": "Cola nome CDSView",
-    "teclado": {"digitar": "https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[1515_tabelas2.DS_TABELA]"},
-    "esperar": {"depois": 0}
-  },
-  {
-    "info": "Localizar",
-    "teclado": {"pressionar": "enter"},
-    "esperar": {"depois": 0}
-  },
+teclado_atalho("ctrl+t", info="Nova ABA")
 
+teclado_digitar("https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[1515_tabelas3.DS_TABELA]", info="Cola nome CDSView")
 
+teclado_pressionar("enter", info="Localizar")
+esperar(4)
 
-{ "secao": "Prepara terceira URL" },
+secao("Tirar Prints")
 
-{
-    "info": "Nova ABA",
-    "teclado": {"atalho":"ctrl+t"},
-    "esperar": {"depois": 0}
-  },
-  {
-    "info": "Cola nome CDSView",
-    "teclado": {"digitar": "https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[1515_tabelas3.DS_TABELA]"},
-    "esperar": {"depois": 0}
-  },
-  {
-    "info": "Localizar",
-    "teclado": {"pressionar": "enter"},
-    "esperar": {"depois": 4}
-  },
+teclado_atalho("ctrl+pgup", info="other tab", repetir=2)
+esperar(4)
 
+teclado_atalho("ctrl+pgdn", info="other tab", repetir=2)
+esperar(4)
 
+esperar(1)
+printscreen(pasta="C:/prints/ds_tabela", nome_arquivo="PRINT_DS_TABELA_[1515_tabelas1.TABELA]",
+            formato="png", sobrescrever=true,
+            x=1926, y=6, largura=1894, altura=2143, info="Print Estrutura CDS View")
 
+teclado_atalho("ctrl+w", info="Fecha ABA")
 
-{ "secao": "Tirar Prints" },
+esperar(1)
+printscreen(pasta="C:/prints/ds_tabela", nome_arquivo="PRINT_DS_TABELA_[1515_tabelas2.TABELA]",
+            formato="png", sobrescrever=true,
+            x=1926, y=6, largura=1894, altura=2143, info="Print Estrutura CDS View")
 
-  {
-    "info": "other tab",
-    "teclado": {"atalho":"ctrl+pgup"},
-    "esperar": {"depois": 4},
-    "repetir": 2
-  },
-  {
-    "info": "other tab",
-    "teclado": {"atalho":"ctrl+pgdn"},
-    "esperar": {"depois": 4},
-    "repetir": 2
-  },
+teclado_atalho("ctrl+w", info="Fecha ABA")
 
+esperar(1)
+printscreen(pasta="C:/prints/ds_tabela", nome_arquivo="PRINT_DS_TABELA_[1515_tabelas3.TABELA]",
+            formato="png", sobrescrever=true,
+            x=1926, y=6, largura=1894, altura=2143, info="Print Estrutura CDS View")
 
-{
-  "info": "Print Estrutura CDS View",
-  "printscreen": {
-    "pasta": "C:/prints/ds_tabela",
-    "nome_arquivo": "PRINT_DS_TABELA_[1515_tabelas1.TABELA]",
-    "regiao": {
-      "x": 1926,
-      "y": 6, 
-      "largura": 1894,
-      "altura": 2143
-    },
-    "formato": "png",
-    "sobrescrever": true
-    },
-  "esperar": {"antes": 1}
-},
-{
-    "info": "Fecha ABA",
-    "teclado": {"atalho":"ctrl+w"},
-    "esperar": {"depois": 0}
-  },
-
-{
-  "info": "Print Estrutura CDS View",
-  "printscreen": {
-    "pasta": "C:/prints/ds_tabela",
-    "nome_arquivo": "PRINT_DS_TABELA_[1515_tabelas2.TABELA]",
-    "regiao": {
-      "x": 1926,
-      "y": 6, 
-      "largura": 1894,
-      "altura": 2143
-    },
-    "formato": "png",
-    "sobrescrever": true
-    },
-  "esperar": {"antes": 1}
-},
-{
-    "info": "Fecha ABA",
-    "teclado": {"atalho":"ctrl+w"},
-    "esperar": {"depois": 0}
-  },
-{
-  "info": "Print Estrutura CDS View",
-  "printscreen": {
-    "pasta": "C:/prints/ds_tabela",
-    "nome_arquivo": "PRINT_DS_TABELA_[1515_tabelas3.TABELA]",
-    "regiao": {
-      "x": 1926,
-      "y": 6, 
-      "largura": 1894,
-      "altura": 2143
-    },
-    "formato": "png",
-    "sobrescrever": true
-    },
-  "esperar": {"antes": 1}
-},
-{
-    "info": "Fecha ABA",
-    "teclado": {"atalho":"ctrl+w"},
-    "esperar": {"depois": 0}
-  }
-
-]
+teclado_atalho("ctrl+w", info="Fecha ABA")

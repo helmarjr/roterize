@@ -1,0 +1,51 @@
+-- Variáveis: i (iteração), count (execuções), py (último resultado funcao_py)
+-- [CAMPO] ou [tabela.CAMPO] = coluna da tabela CSV selecionada
+
+secao("CDS_View Nome")
+-- sap
+mouse(x=390, y=475, acao="clicar_esquerdo")
+teclado_pressionar("down", repetir=i-1)
+teclado_pressionar("enter")
+esperar(1)
+teclado_pressionar("tab", repetir=4)
+teclado_atalho("ctrl+c", info="Copiar nome")
+
+--excel
+mouse(x=2000, y=425, acao="clicar_esquerdo")
+esperar(1)
+mouse(x=2000, y=425, acao="clicar_esquerdo")
+teclado_pressionar("down", repetir=i)
+teclado_atalho("ctrl+v", info="Colar nome")
+
+---------------------------------------------------------------------
+---------------------------------------------------------------------
+
+secao("Valor de Calculation Time")
+-- sap
+mouse(x=1200, y=1365, acao="clicar_esquerdo")
+teclado_atalho("ctrl+a")
+teclado_atalho("ctrl+c", info="Copiar Valor")
+
+--excel
+mouse(x=2065, y=40, acao="clicar_esquerdo")
+esperar(1)
+teclado_pressionar("tab")
+teclado_atalho("ctrl+v", info="Colar Valor")
+
+---------------------------------------------------------------------
+---------------------------------------------------------------------
+
+secao("Valor de Transfer Time")
+-- sap
+mouse(x=1200, y=1400, acao="clicar_esquerdo")
+teclado_atalho("ctrl+a")
+teclado_atalho("ctrl+c", info="Copiar Valor")
+
+--excel
+mouse(x=2065, y=40, acao="clicar_esquerdo")
+esperar(1)
+teclado_pressionar("tab")
+teclado_atalho("ctrl+v", info="Colar Valor")
+
+---------------------------------------------------------------------
+---------------------------------------------------------------------

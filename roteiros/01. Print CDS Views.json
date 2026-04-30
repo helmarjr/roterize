@@ -1,152 +1,50 @@
-[
-  {
-    "info": "Roteiro para Printar CDS View no Eclipse"
-  },
+-- Roteiro para Printar CDS View no Eclipse
 
- {
-    "info": "Abrir CDS View",
-    "teclado": {"pressionar": "enter"},
-    "esperar": {"depois": 2}
-  },
+teclado_pressionar("enter", info="Abrir CDS View")
+esperar(2)
 
+mouse(x=1000, y=900, acao="clicar_esquerdo", info="Foco texto")
 
-  {
-    "info": "Foco texto",
-    "mouse": {"x": 1000, "y": 900, "acao": "clicar_esquerdo"},
-    "esperar": {"depois": 0}
-  },
+mouse(x=1000, y=900, acao="clicar_segurar", info="seleciona texto 1/3")
 
+mouse(x=400, y=190, acao="mover", info="seleciona texto 2/3")
 
- {
-    "info": "seleciona texto 1/3",
-    "mouse": {"x": 1000, "y": 900, "acao": "clicar_segurar"},
-    "esperar": {"depois": 0}
-  },
-  {
-    "info": "seleciona texto 2/3",
-    "mouse": {"x": 400, "y": 190, "acao": "mover"},
-    "esperar": {"depois": 0}
-  },
-  {
-    "info": "seleciona texto 3/3",
-    "mouse": {"x": 400, "y": 190, "acao": "clicar_soltar"},
-    "esperar": {"depois": 0}
-  },
+mouse(x=400, y=190, acao="clicar_soltar", info="seleciona texto 3/3")
 
+teclado_atalho("ctrl+c", info="Copia o texto")
 
- {
-    "info": "Copia o texto",
-    "teclado": {"atalho":"ctrl+c"},
-    "esperar": {"depois": 0}
-  },
-  {
-    "info": "Foco texto",
-    "mouse": {"x": 1000, "y": 900, "acao": "clicar_esquerdo"},
-    "esperar": {"depois": 0}
-  },
- {
-    "info": "Pega nome da tabela",
-    "teclado": {"funcao_py": "extrair_tabela_do_from", "colar": false},
-    "esperar": {"depois": 0}
-  },
+mouse(x=1000, y=900, acao="clicar_esquerdo", info="Foco texto")
 
+teclado_funcao_py("extrair_tabela_do_from", colar=false, info="Pega nome da tabela")
 
+esperar(2)
+printscreen(pasta="C:/prints/estrutura", nome_arquivo="PRINT_CDS_VIEW_ESTRUTURA_{py}",
+            formato="png", sobrescrever=true,
+            x=9, y=180, largura=1900, altura=1900, info="Print Estrutura CDS View")
+esperar(0.3)
 
-{
-  "info": "Print Estrutura CDS View",
-  "printscreen": {
-    "pasta": "C:/prints/estrutura",
-    "nome_arquivo": "PRINT_CDS_VIEW_ESTRUTURA_{py}",
-    "regiao": {
-      "x": 9,
-      "y": 180,
-      "largura": 1900,
-      "altura": 1900
-    },
-    "formato": "png",
-    "sobrescrever": true
-    },
-  "esperar": {"antes": 2, "depois": 0.3}
-},
+mouse(x=1300, y=900, acao="clicar_direito", info="menu")
 
+mouse(x=1515, y=1065, acao="clicar_esquerdo", info="menu open with")
 
+mouse(x=1140, y=1065, acao="clicar_esquerdo", info="menu data preview")
 
-  {
-    "info": "menu",
-    "mouse": {"x": 1300, "y": 900, "acao": "clicar_direito"},
-    "esperar": {"depois": 0}
-  },
+mouse(x=1288, y=1121, acao="clicar_esquerdo", info="fecha erro")
 
-  {
-    "info": "menu open with",
-    "mouse": {"x": 1515, "y": 1065, "acao": "clicar_esquerdo"},
-    "esperar": {"depois": 0}
-  },
- {
-    "info": "menu data preview",
-    "mouse": {"x": 1140, "y": 1065, "acao": "clicar_esquerdo"},
-    "esperar": {"depois": 0}
-  },
- {
-    "info": "fecha erro",
-    "mouse": {"x": 1288, "y": 1121, "acao": "clicar_esquerdo"},
-    "esperar": {"depois": 0}
-  },
- {
-    "info": "Tira mouse do print",
-    "mouse": {"x": 1140, "y": 195, "acao": "clicar_esquerdo"},
-    "esperar": {"depois": 0}
-  },
+mouse(x=1140, y=195, acao="clicar_esquerdo", info="Tira mouse do print")
 
-{
-  "info": "Print Preview CDS View",
-  "printscreen": {
-    "pasta": "C:/prints/preview",
-    "nome_arquivo": "PRINT_PREVIEW_CDS_VIEW_{py}",
-    "regiao": {
-      "x": 9,
-      "y": 180,
-      "largura": 1900,
-      "altura": 1900
-    },
-    "formato": "png",
-    "sobrescrever": true
-    },
-  "esperar": {"antes": 20, "depois": 0.3}
-},
+esperar(20)
+printscreen(pasta="C:/prints/preview", nome_arquivo="PRINT_PREVIEW_CDS_VIEW_{py}",
+            formato="png", sobrescrever=true,
+            x=9, y=180, largura=1900, altura=1900, info="Print Preview CDS View")
+esperar(0.3)
 
+mouse(x=550, y=286, acao="clicar_direito", info="Fecha ABA")
 
+mouse(x=630, y=420, acao="clicar_esquerdo", info="Fecha ALL ABA")
 
-  {
-    "info": "Fecha ABA",
-    "mouse": {"x": 550, "y": 286, "acao": "clicar_direito"},
-    "esperar": {"depois": 0}
-  },
-  {
-    "info": "Fecha ALL ABA",
-    "mouse": {"x": 630, "y": 420, "acao": "clicar_esquerdo"},
-    "esperar": {"depois": 0}
-  },
-  {
-    "info": "Fecha ABA",
-    "mouse": {"x": 550, "y": 286, "acao": "clicar_direito"},
-    "esperar": {"depois": 0}
-  },
-  {
-    "info": "Fecha ALL ABA",
-    "mouse": {"x": 630, "y": 305, "acao": "clicar_esquerdo"},
-    "esperar": {"depois": 0}
-  },
+mouse(x=550, y=286, acao="clicar_direito", info="Fecha ABA")
 
+mouse(x=630, y=305, acao="clicar_esquerdo", info="Fecha ALL ABA")
 
-{
-    "info": "Proxima CDS",
-    "teclado": {"pressionar": "down"},
-    "esperar": {"depois": 0},
-    "repetir": 1 
-  }
-
-
-
-
-]
+teclado_pressionar("down", info="Proxima CDS", repetir=1)

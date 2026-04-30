@@ -1,0 +1,7 @@
+-- Variáveis: i (iteração), count (execuções), py (último resultado funcao_py)
+-- [CAMPO] ou [tabela.CAMPO] = coluna da tabela CSV selecionada
+
+
+printscreen(pasta="C:\prints", nome_arquivo="Imagem_{i*10000}", 
+	    formato="png", sobrescrever=true, 
+	    x=350, y=820, largura=1400, altura=1180)

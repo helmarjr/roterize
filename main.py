@@ -105,7 +105,6 @@ class StepContext:
     table_contexts: dict[str, "TableCursor"]
     default_table: "TableCursor | None"
     acquired_tables: set[str]
-    execution_count: int = 0
     py_result: str = ""
 
 
@@ -199,7 +198,7 @@ class ScriptRunner:
         self.get_delay = get_delay
         self.get_start_delay = get_start_delay
 
-    def run(self, steps: list[dict[str, Any]], repetitions: int, selected_table: str | None, execution_count: int = 0) -> None:
+    def run(self, steps: list[dict[str, Any]], repetitions: int, selected_table: str | None) -> None:
         table_contexts: dict[str, TableCursor] = {}
         default_table = self._load_default_table(selected_table, table_contexts)
         self._load_explicit_tables(steps, table_contexts)
@@ -216,7 +215,7 @@ class ScriptRunner:
                 self.log("Sem registros pendentes suficientes para continuar. Execução finalizada.", ConsoleTag.WARNING.value)
                 return
 
-            self._run_iteration(steps, iteration_index, repetitions, table_contexts, default_table, execution_count)
+            self._run_iteration(steps, iteration_index, repetitions, table_contexts, default_table)
 
         self.log("Execução concluída.", ConsoleTag.SUCCESS.value)
 
@@ -261,11 +260,10 @@ class ScriptRunner:
         repetitions: int,
         table_contexts: dict[str, TableCursor],
         default_table: TableCursor | None,
-        execution_count: int = 0,
     ) -> None:
         iteration_start = time.perf_counter()
         acquired_tables: set[str] = set()
-        context = StepContext(iteration_index, table_contexts, default_table, acquired_tables, execution_count)
+        context = StepContext(iteration_index, table_contexts, default_table, acquired_tables)
 
         self.log(f"--- Iteração {iteration_index + 1}/{repetitions} ---", ConsoleTag.ITERATION.value)
         try:
@@ -308,10 +306,11 @@ class ScriptRunner:
 
         info = str(step.get("info") or step.get("obs") or f"Item {step_index}")
         before_wait, after_wait = self._parse_wait(step.get("esperar"))
-        repeat_count = max(self._parse_repeat(step.get("repetir"), context), 1)
+        raw_repetir = step.get("repetir")
+        repeat_count = max(self._parse_repeat(raw_repetir, context), 1)
         action_kind, action_payload = self._get_action_payload(step)
 
-        summary = self._build_step_summary(info, action_kind, action_payload, before_wait, after_wait, repeat_count)
+        summary = self._build_step_summary(info, action_kind, action_payload, before_wait, after_wait, repeat_count, raw_repetir)
         self.log(summary, ConsoleTag.STEP.value)
 
         for _ in range(repeat_count):
@@ -352,6 +351,7 @@ class ScriptRunner:
         before_wait: float,
         after_wait: float,
         repeat_count: int,
+        raw_repetir: Any = None,
     ) -> str:
         parts = [f"> {info}"]
         if before_wait > 0:
@@ -367,7 +367,10 @@ class ScriptRunner:
             parts.append(
                 f"PRINTSCREEN=nome:{action_payload.get('nome_arquivo')}, pasta:{action_payload.get('pasta')}, formato:{action_payload.get('formato', 'png')}"
             )
-        if repeat_count > 1:
+        if raw_repetir is not None and raw_repetir != "":
+            label = f"REPETIR={raw_repetir}({repeat_count})" if str(raw_repetir) != str(repeat_count) else f"REPETIR={repeat_count}"
+            parts.append(label)
+        elif repeat_count > 1:
             parts.append(f"REPETIR={repeat_count}")
         if after_wait > 0:
             parts.append(f"DEPOIS={after_wait}s")
@@ -439,7 +442,7 @@ class ScriptRunner:
             return 1
         if isinstance(repeat_value, int):
             return repeat_value
-        return int(self._safe_eval(str(repeat_value).strip(), context.iteration_index, context.execution_count))
+        return int(self._safe_eval(str(repeat_value).strip(), context.iteration_index))
 
     def _execute_mouse(self, payload: dict[str, Any], context: StepContext) -> None:
         action = str(payload.get("acao", "")).strip().lower()
@@ -665,7 +668,7 @@ class ScriptRunner:
         try:
             return int(float(text))
         except ValueError:
-            return int(self._safe_eval(text, context.iteration_index, context.execution_count))
+            return int(self._safe_eval(text, context.iteration_index))
 
     def _resolve_field_reference(self, reference: str, context: StepContext) -> str:
         raw_reference = reference.strip()
@@ -693,7 +696,6 @@ class ScriptRunner:
         return (
             text
             .replace("{i}", str(context.iteration_index))
-            .replace("{count}", str(context.execution_count))
             .replace("{py}", context.py_result)
         )
 
@@ -709,7 +711,7 @@ class ScriptRunner:
         return re.sub(r"\[([^\[\]]+)\]", replace_match, processed)
 
     @staticmethod
-    def _safe_eval(expression: str, iteration_index: int, execution_count: int = 0) -> int:
+    def _safe_eval(expression: str, iteration_index: int) -> int:
         _ALLOWED_OPS: dict[type, Any] = {
             ast.Add: operator.add,
             ast.Sub: operator.sub,
@@ -719,7 +721,7 @@ class ScriptRunner:
             ast.Mod: operator.mod,
             ast.Pow: operator.pow,
         }
-        _VARS = {"i": float(iteration_index), "count": float(execution_count)}
+        _VARS = {"i": float(iteration_index)}
 
         def _eval(node: ast.AST) -> float:
             if isinstance(node, ast.Expression):
@@ -780,13 +782,17 @@ class DslAutocomplete:
         self._lb: tk.Listbox | None = None
         self._items: list[str] = []
         self._ctx: str = "none"
-        editor.bind("<KeyRelease>", self._on_key_release, add=True)
-        editor.bind("<FocusOut>",   lambda _e: self._hide(), add=True)
+        editor.bind("<KeyRelease>",    self._on_key_release, add=True)
+        editor.bind("<Control-space>", self._on_ctrl_space, add=True)
+        editor.bind("<FocusOut>",      lambda _e: self._hide(), add=True)
 
     # ── Public ────────────────────────────────────────────────────────────────
 
     def hide(self) -> None:
         self._hide()
+
+    def _is_popup_visible(self) -> bool:
+        return self._popup is not None and self._popup.winfo_exists()
 
     # ── Context detection ─────────────────────────────────────────────────────
 
@@ -837,6 +843,8 @@ class DslAutocomplete:
     def _on_key_release(self, event: tk.Event) -> None:
         if event.keysym in ("Escape", "Return", "Tab", "Up", "Down", "Left", "Right"):
             return
+        if not self._is_popup_visible():
+            return
         prefix, ctx = self._get_context()
         if ctx == "none":
             self._hide()
@@ -865,6 +873,33 @@ class DslAutocomplete:
         self._ctx = ctx
         self._items = items
         self._show_popup(items)
+
+    def _on_ctrl_space(self, _event: tk.Event) -> str:
+        prefix, ctx = self._get_context()
+        if ctx == "none":
+            s = self._line_to_cursor().lstrip()
+            if "(" not in s:
+                prefix, ctx = s, "func"
+            else:
+                return "break"
+        if ctx == "func":
+            items = [f for f in self._FUNCTIONS if f.startswith(prefix)]
+        elif ctx == "acao":
+            items = [a for a in self._MOUSE_ACOES if a.startswith(prefix)]
+        elif ctx == "funcao_py":
+            items = [f for f in self._TRANSFORM if f.startswith(prefix)]
+        elif ctx == "tecla":
+            items = [t for t in self._TECLAS if t.lower().startswith(prefix.lower())]
+        elif ctx == "formato":
+            items = [f for f in self._FORMATOS if f.startswith(prefix)]
+        elif ctx == "bracket":
+            items = [c for c in self._get_cols() if c.upper().startswith(prefix.upper())]
+        else:
+            items = []
+        if items:
+            self._ctx, self._items = ctx, items
+            self._show_popup(items)
+        return "break"
 
     # ── Popup ─────────────────────────────────────────────────────────────────
 
@@ -1369,7 +1404,7 @@ class HelpWindow(tk.Toplevel):
         self._ins("?", "tip")
         self._ins(" na documentação — basta omiti-los.\n", "body")
         self._code("""\
--- Variáveis: i (iteração), count (execuções), py (resultado funcao_py)
+-- Variáveis: i (iteração), py (resultado funcao_py)
 -- [CAMPO] ou [tabela.CAMPO] = coluna da tabela CSV
 
 secao("Bloco 1 — Abrir janela")
@@ -1407,10 +1442,8 @@ teclado_atalho("ctrl+s", info="Salvar")""")
         self._ins(" como parâmetros opcionais.\n", "body")
         self._code("""\
 teclado_pressionar("tab", repetir=3, info="Avançar 3 campos")
-mouse(x=400, y=300, acao="clicar_esquerdo", repetir=i+1)
-teclado_pressionar("tab", repetir=count*2)""")
-        self._item("i",     "índice da iteração atual (começa em 0)", "ph")
-        self._item("count", "número de execuções acumuladas (começa em 1)", "ph")
+mouse(x=400, y=300, acao="clicar_esquerdo", repetir=i+1)""")
+        self._item("i", "índice da iteração atual (começa em 0)", "ph")
         self._note("Operadores disponíveis em repetir:  + − * / // % **")
 
     # ── 3. Mouse ──────────────────────────────────────────────────────────────
@@ -1440,8 +1473,6 @@ teclado_pressionar("tab", repetir=count*2)""")
         self._ins("y", "field")
         self._ins(" aceitam expressões aritméticas com ", "body")
         self._ins("i", "ph")
-        self._ins(" e ", "body")
-        self._ins("count", "ph")
         self._ins(":\n", "body")
         self._code("""\
 mouse(x=400, y=42 + i * 20, acao="clicar_esquerdo")
@@ -1467,7 +1498,7 @@ mouse(x=600, y=300, acao="clicar_soltar")""")
         self._ins(" ou variável.\n", "body")
         self._code("""\
 teclado_digitar("texto fixo")
-teclado_digitar("Arquivo_{i}_exec{count}")  -- placeholders dentro de strings
+teclado_digitar("Arquivo_{i}")  -- placeholders dentro de strings
 teclado_digitar([NOME])                     -- coluna da tabela selecionada
 teclado_digitar([clientes.EMAIL])           -- coluna de tabela específica
 teclado_digitar(py)                         -- último resultado de funcao_py""")
@@ -1533,7 +1564,7 @@ teclado_funcao_py("trocar_prefixo_tabela_rf", colar=true) -- py → digita""")
         self._ins(":\n", "body")
         self._code("""\
 printscreen(pasta="C:/prints",
-            nome_arquivo="Print_{count}_{i}_[CAMPO]",
+            nome_arquivo="Print_{i}_[CAMPO]",
             formato="png",
             sobrescrever=false,
             x=0, y=0, largura=1920, altura=1080)""")
@@ -1556,14 +1587,13 @@ printscreen(pasta="C:/prints",
         for token, desc in [
             ("[CAMPO]",        "coluna da tabela selecionada no dropdown"),
             ("[tabela.CAMPO]", "coluna de tabela específica"),
-            ("{count}",        "número de execuções acumuladas"),
             ("{i}",            "índice da iteração atual"),
             ("{py}",           "último resultado de funcao_py"),
         ]:
             self._ins("    ")
             self._ins(f"{token:<22}", "ph")
             self._ins(f"→  {desc}\n", "muted")
-        self._code('printscreen(pasta="C:/prints", nome_arquivo="Rel_[clientes.NOME]_exec{count}_iter{i}",\n'
+        self._code('printscreen(pasta="C:/prints", nome_arquivo="Rel_[clientes.NOME]_iter{i}",\n'
                    '            formato="png", sobrescrever=false, x=0, y=0, largura=1920, altura=1080)')
 
     # ── 6. Variáveis e placeholders ───────────────────────────────────────────
@@ -1576,9 +1606,8 @@ printscreen(pasta="C:/prints",
         self._ins(" dentro de strings:\n", "body")
         self._nl()
         for var, ph, desc in [
-            ("i",     "{i}",     "índice da iteração atual (começa em 0, reseta a cada Executar)"),
-            ("count", "{count}", "total de cliques em Executar na sessão (começa em 1, acumula)"),
-            ("py",    "{py}",    "último resultado de funcao_py com colar=false (reseta a cada iteração)"),
+            ("i",  "{i}",  "índice da iteração atual (começa em 0, reseta a cada Executar)"),
+            ("py", "{py}", "último resultado de funcao_py com colar=false (reseta a cada iteração)"),
         ]:
             self._ins(f"    ")
             self._ins(f"{var:<8}", "ph")
@@ -1587,11 +1616,11 @@ printscreen(pasta="C:/prints",
             self._ins(f"{desc}\n", "body")
         self._nl()
         self._code("""\
-teclado_digitar("Arquivo_{count}_linha_{i}")
+teclado_digitar("Arquivo_{i}")
 teclado_digitar([NOME])                          -- coluna da tabela
 mouse(x=400, y=42 + i * 20, acao="clicar_esquerdo")
-teclado_pressionar("tab", repetir=count + i)
-printscreen(pasta="C:/p", nome_arquivo="Print_{count}_{i}_[CAMPO]",
+teclado_pressionar("tab", repetir=i+1)
+printscreen(pasta="C:/p", nome_arquivo="Print_{i}_[CAMPO]",
             formato="png", sobrescrever=false, x=0, y=0, largura=1920, altura=1080)""")
 
     # ── 7. Tabelas CSV ────────────────────────────────────────────────────────
@@ -1642,7 +1671,7 @@ esperar(1.0)""")
 secao("CAPTURAR TELA")
 
 esperar(2.0)
-printscreen(pasta="C:/prints/exec_{count}",
+printscreen(pasta="C:/prints",
             nome_arquivo="[tabela.CODIGO]_iter{i}",
             formato="png", sobrescrever=true,
             x=0, y=0, largura=1920, altura=1040)""")
@@ -1692,8 +1721,6 @@ class AutomationApp(tk.Tk):
         self.delay_var = tk.StringVar(value="0.3")
         self.repetitions_var = tk.StringVar(value="1")
         self.mouse_position_var = tk.StringVar(value="Mouse: X=0  Y=0")
-        self.execution_count: int = 0
-        self.count_var = tk.StringVar(value="Count: 0")
 
         self.log_queue: queue.Queue[tuple[str, str]] = queue.Queue()
         self.stop_event = threading.Event()
@@ -1776,7 +1803,6 @@ class AutomationApp(tk.Tk):
 
         ttk.Separator(controls, orient="vertical").pack(side="left", fill="y", padx=8)
         ttk.Label(controls, textvariable=self.mouse_position_var, font=("Consolas", 11)).pack(side="left", padx=(0, 16))
-        ttk.Label(controls, textvariable=self.count_var, font=("Consolas", 11)).pack(side="left")
 
         # ── Editor + Console ──────────────────────────────────────────────────
         center = ttk.Panedwindow(self, orient="vertical")
@@ -1922,7 +1948,7 @@ class AutomationApp(tk.Tk):
     _DSL_BRACKET_RE = re.compile(r"\[[^\[\]]+\]")
     _DSL_NUMBER_RE = re.compile(r"(?<!['\w])-?\b\d+(?:\.\d+)?\b")
     _DSL_BOOL_RE   = re.compile(r"\b(true|false)\b")
-    _DSL_VAR_RE    = re.compile(r"\b(i|count|py)\b")
+    _DSL_VAR_RE    = re.compile(r"\b(i|py)\b")
 
     def _apply_dsl_highlight(self) -> None:
         content = self.script_text.get("1.0", "end-1c")
@@ -2082,10 +2108,7 @@ class AutomationApp(tk.Tk):
 
         self.clear_console()
         self.stop_event.clear()
-        self.execution_count += 1
-        self.count_var.set(f"Count: {self.execution_count}")
         selected_table = self.selected_table_var.get().strip() or None
-        execution_count = self.execution_count
 
         runner = ScriptRunner(
             self.log,
@@ -2096,8 +2119,8 @@ class AutomationApp(tk.Tk):
 
         def target() -> None:
             try:
-                self.log(f"Execução iniciada. [count={execution_count}]", ConsoleTag.INFO.value)
-                runner.run(steps, repetitions, selected_table, execution_count)
+                self.log("Execução iniciada.", ConsoleTag.INFO.value)
+                runner.run(steps, repetitions, selected_table)
             except Exception as exc:
                 self.log(f"ERRO: {exc}", ConsoleTag.ERROR.value)
             finally:
@@ -2108,8 +2131,6 @@ class AutomationApp(tk.Tk):
 
     def stop_execution(self) -> None:
         self.stop_event.set()
-        self.execution_count = 0
-        self.count_var.set("Count: 0")
         self.log("Solicitação de parada registrada.", ConsoleTag.WARNING.value)
 
     def clear_console(self) -> None:

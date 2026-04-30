@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python -c \"import ast; import main\")"
+      "Bash(python -c \"import ast; import main\")",
+      "Bash(grep -E \"\\\\.\\(ui|qml|pyw|yaml|json|txt|md|cfg|ini\\)$\")"
     ]
   }
 }
