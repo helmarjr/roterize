@@ -1,0 +1,222 @@
+secao("URL 1")
+mouse(x=1990, y=30, acao="clicar_esquerdo")
+
+teclado_atalho("ctrl+t", info="nova ABA")
+teclado_digitar("https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[limpar_tabelas1.TABELA]", info="URL")
+esperar(1)
+teclado_pressionar("enter")
+esperar(0.5)
+
+
+secao("URL 2")
+
+teclado_atalho("ctrl+t", info="nova ABA")
+teclado_digitar("https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[limpar_tabelas2.TABELA]", info="URL")
+esperar(1)
+mouse(x=700, y=88, acao="clicar_esquerdo")
+teclado_atalho("ctrl+a")
+teclado_pressionar("enter")
+esperar(0.5)
+
+secao("URL 3")
+
+teclado_atalho("ctrl+t", info="nova ABA")
+teclado_digitar("https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[limpar_tabelas3.TABELA]", info="URL")
+esperar(1)
+mouse(x=700, y=88, acao="clicar_esquerdo")
+teclado_atalho("ctrl+a")
+teclado_pressionar("enter")
+esperar(0.5)
+
+
+
+secao("URL 4")
+
+teclado_atalho("ctrl+t", info="nova ABA")
+teclado_digitar("https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[limpar_tabelas4.TABELA]", info="URL")
+esperar(1)
+mouse(x=700, y=88, acao="clicar_esquerdo")
+teclado_atalho("ctrl+a")
+teclado_pressionar("enter")
+esperar(0.5)
+
+
+
+secao("URL 5")
+
+teclado_atalho("ctrl+t", info="nova ABA")
+teclado_digitar("https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[limpar_tabelas5.TABELA]", info="URL")
+esperar(1)
+mouse(x=700, y=88, acao="clicar_esquerdo")
+teclado_atalho("ctrl+a")
+teclado_pressionar("enter")
+esperar(0.5)
+
+
+
+secao("URL 6")
+
+teclado_atalho("ctrl+t", info="nova ABA")
+teclado_digitar("https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[limpar_tabelas6.TABELA]", info="URL")
+esperar(1)
+mouse(x=700, y=88, acao="clicar_esquerdo")
+teclado_atalho("ctrl+a")
+teclado_pressionar("enter")
+esperar(0.5)
+
+
+secao("URL 7")
+
+teclado_atalho("ctrl+t", info="nova ABA")
+teclado_digitar("https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[limpar_tabelas7.TABELA]", info="URL")
+esperar(1)
+mouse(x=700, y=88, acao="clicar_esquerdo")
+teclado_atalho("ctrl+a")
+teclado_pressionar("enter")
+esperar(0.5)
+
+
+
+secao("URL 8")
+
+teclado_atalho("ctrl+t", info="nova ABA")
+teclado_digitar("https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[limpar_tabelas8.TABELA]", info="URL")
+esperar(1)
+mouse(x=700, y=88, acao="clicar_esquerdo")
+teclado_atalho("ctrl+a")
+teclado_pressionar("enter")
+esperar(0.5)
+
+
+
+secao("URL 9")
+
+teclado_atalho("ctrl+t", info="nova ABA")
+teclado_digitar("https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[limpar_tabelas9.TABELA]", info="URL")
+esperar(1)
+mouse(x=700, y=88, acao="clicar_esquerdo")
+teclado_atalho("ctrl+a")
+teclado_pressionar("enter")
+esperar(0.5)
+
+
+secao("URL 10")
+
+teclado_atalho("ctrl+t", info="nova ABA")
+teclado_digitar("https://valedevdatasphere.us10.hcs.cloud.sap/dwaas-core/index.html#/databuilder&/db/VALE_S4H_ING/[limpar_tabelas10.TABELA]", info="URL")
+esperar(1)
+mouse(x=700, y=88, acao="clicar_esquerdo")
+teclado_atalho("ctrl+a")
+teclado_pressionar("enter")
+esperar(0.5)
+
+
+teclado_atalho("ctrl+pgup")
+teclado_atalho("ctrl+pgup")
+teclado_atalho("ctrl+pgup")
+teclado_atalho("ctrl+pgup")
+teclado_atalho("ctrl+pgup")
+teclado_atalho("ctrl+pgup")
+teclado_atalho("ctrl+pgup")
+teclado_atalho("ctrl+pgup")
+teclado_atalho("ctrl+pgup")
+
+
+secao("Aba 1")
+mouse(x=100, y=300, acao="clicar_esquerdo")
+teclado_pressionar("tab", repetir=8)
+teclado_pressionar("enter")
+esperar(0.5)
+teclado_pressionar("enter")
+esperar(1)
+teclado_atalho("ctrl+w")
+esperar(0.5)
+
+secao("Aba 2")
+mouse(x=100, y=300, acao="clicar_esquerdo")
+teclado_pressionar("tab", repetir=8)
+teclado_pressionar("enter")
+esperar(0.5)
+teclado_pressionar("enter")
+esperar(1)
+teclado_atalho("ctrl+w")
+esperar(0.5)
+
+secao("Aba 3")
+mouse(x=100, y=300, acao="clicar_esquerdo")
+teclado_pressionar("tab", repetir=8)
+teclado_pressionar("enter")
+esperar(0.5)
+teclado_pressionar("enter")
+esperar(1)
+teclado_atalho("ctrl+w")
+esperar(0.5)
+
+secao("Aba 4")
+mouse(x=100, y=300, acao="clicar_esquerdo")
+teclado_pressionar("tab", repetir=8)
+teclado_pressionar("enter")
+esperar(0.5)
+teclado_pressionar("enter")
+esperar(1)
+teclado_atalho("ctrl+w")
+esperar(0.5)
+
+secao("Aba 5")
+mouse(x=100, y=300, acao="clicar_esquerdo")
+teclado_pressionar("tab", repetir=8)
+teclado_pressionar("enter")
+esperar(0.5)
+teclado_pressionar("enter")
+esperar(1)
+teclado_atalho("ctrl+w")
+esperar(0.5)
+
+secao("Aba 6")
+mouse(x=100, y=300, acao="clicar_esquerdo")
+teclado_pressionar("tab", repetir=8)
+teclado_pressionar("enter")
+esperar(0.5)
+teclado_pressionar("enter")
+esperar(1)
+teclado_atalho("ctrl+w")
+esperar(0.5)
+
+secao("Aba 7")
+mouse(x=100, y=300, acao="clicar_esquerdo")
+teclado_pressionar("tab", repetir=8)
+teclado_pressionar("enter")
+esperar(0.5)
+teclado_pressionar("enter")
+esperar(1)
+teclado_atalho("ctrl+w")
+esperar(0.5)
+
+secao("Aba 8")
+mouse(x=100, y=300, acao="clicar_esquerdo")
+teclado_pressionar("tab", repetir=8)
+teclado_pressionar("enter")
+esperar(0.5)
+teclado_pressionar("enter")
+esperar(1)
+teclado_atalho("ctrl+w")
+esperar(0.5)
+
+secao("Aba 9")
+mouse(x=100, y=300, acao="clicar_esquerdo")
+teclado_pressionar("tab", repetir=8)
+teclado_pressionar("enter")
+esperar(0.5)
+teclado_pressionar("enter")
+esperar(1)
+teclado_atalho("ctrl+w")
+esperar(0.5)
+
+secao("Aba 10")
+mouse(x=100, y=300, acao="clicar_esquerdo")
+teclado_pressionar("tab", repetir=8)
+teclado_pressionar("enter")
+esperar(0.5)
+teclado_pressionar("enter")
+esperar(1)
+teclado_atalho("ctrl+w")

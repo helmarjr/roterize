@@ -1,57 +1,28 @@
-[
-  {
-    "info": "acessa tabela",
-    "mouse": {"x": 2440, "y": 570, "acao": "clicar_esquerdo"},
-    "esperar": {"depois": 5}
-  },
-  {
-    "info": "data builder",
-    "mouse": {"x": 2325, "y": 290, "acao": "clicar_esquerdo"},
-    "esperar": {"depois": 10}
-  },
-{
-    "info": "posiciona",
-    "mouse": {"x": 1500, "y": 300, "acao": "clicar_esquerdo"},
-    "esperar": {"depois": 0.5}
-  },
+--- Acessa item da lista do Monitor
+mouse(x=2440, y=570, acao="clicar_esquerdo", info="acessa tabela")
+esperar(5)
 
-{
-    "info": "Posiciona no Deletar",
-    "teclado": {"pressionar": "tab"},
-    "esperar": {"depois": 0},
-    "repetir": 8
-  },
-  {
-    "info": "Seleciona",
-    "teclado": {"pressionar": "enter"},
-    "esperar": {"depois": 1	}
-  },
-  {
-    "info": "Seleciona",
-    "teclado": {"pressionar": "enter"},
-    "esperar": {"depois": 0.5}
-  },
-{
-    "info": "Posiciona no Deletar",
-    "teclado": {"pressionar": "tab"},
-    "esperar": {"depois": 0},
-    "repetir": 3
-  },
 
-  {
-    "info": "Seleciona",
-    "teclado": {"pressionar": "enter"},
-    "esperar": {"depois": 1}
-  },
- {
-    "info": "voltar",
-    "mouse": {"x": 120, "y": 200, "acao": "clicar_esquerdo"},
-    "esperar": {"depois": 2}
-  },
- {
-    "info": "voltar",
-    "mouse": {"x": 122, "y": 202, "acao": "clicar_esquerdo"},
-    "esperar": {"depois": 4}
-  }
+--- Detalhe Monitor
+mouse(x=1500, y=300, acao="clicar_esquerdo", info="posiciona")
+teclado_pressionar("tab", repetir=3, info="Posiciona no Data Builder")
+teclado_pressionar("enter", info="Entra no data builder")
+esperar(10)
 
-]
+
+--- Data Builder
+mouse(x=1500, y=300, acao="clicar_esquerdo", info="posiciona")
+teclado_pressionar("tab", repetir=8, info="Posiciona Delete data from table")
+esperar(0.5)
+
+teclado_pressionar("enter", info="Seleciona Delete")
+esperar(1)
+
+teclado_pressionar("enter", info="Seleciona")
+esperar(0.5)
+
+mouse(x=120, y=200, acao="clicar_esquerdo", info="voltar")
+esperar(2)
+
+mouse(x=122, y=202, acao="clicar_esquerdo", info="voltar")
+esperar(4)

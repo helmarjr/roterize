@@ -64,7 +64,7 @@ class Constants:
     LOG_POLL_INTERVAL_MS: int = 150
     MOUSE_POLL_INTERVAL_MS: int = 100
     FAILSAFE_CORNER_THRESHOLD: int = 10
-    APP_WINDOW_GEOMETRY: str = "1240x800"
+    APP_WINDOW_GEOMETRY: str = "1240x1400"
     TABLE_EDITOR_GEOMETRY: str = "900x560"
     SCRIPT_EDITOR_GEOMETRY: str = "980x620"
     HELP_WINDOW_GEOMETRY: str = "980x760"
@@ -626,7 +626,7 @@ class ScriptRunner:
 
     def _paste_via_clipboard(self, text: str) -> None:
         self._clipboard_copy_with_retry(text)
-        time.sleep(0.05)
+        time.sleep(0.20)
         pyautogui.hotkey("ctrl", "v")
 
     def _execute_transform_function(self, function_name: str, context: StepContext, colar: bool = True) -> None:
@@ -641,7 +641,7 @@ class ScriptRunner:
         context.py_result = transformed_text
         self._clipboard_copy_with_retry(transformed_text)
         if colar:
-            time.sleep(0.05)
+            time.sleep(0.20)
             pyautogui.hotkey("ctrl", "v")
         self.log(f"funcao_py aplicada: {function_name} → {transformed_text!r}  (colar={colar})", ConsoleTag.INFO.value)
 
