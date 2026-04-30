@@ -114,12 +114,18 @@ esperar(0.5)
 teclado_atalho("ctrl+pgup")
 teclado_atalho("ctrl+pgup")
 teclado_atalho("ctrl+pgup")
+
+teclado_atalho("ctrl+pgup")
+
+teclado_atalho("ctrl+pgup")
+
+teclado_atalho("ctrl+pgup")
+
+teclado_atalho("ctrl+pgup")
+
 teclado_atalho("ctrl+pgup")
 teclado_atalho("ctrl+pgup")
-teclado_atalho("ctrl+pgup")
-teclado_atalho("ctrl+pgup")
-teclado_atalho("ctrl+pgup")
-teclado_atalho("ctrl+pgup")
+esperar(2)
 
 
 secao("Aba 1")
